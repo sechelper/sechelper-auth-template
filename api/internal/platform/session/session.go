@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("session not found")
-	ErrConflict = errors.New("session version conflict")
+	ErrNotFound     = errors.New("session not found")
+	ErrConflict     = errors.New("session version conflict")
+	ErrRefreshReuse = errors.New("refresh token reuse detected")
 )
 
 type Session struct {
@@ -41,6 +42,13 @@ type Store interface {
 	Update(context.Context, Session) error
 	Revoke(context.Context, string) error
 	ListBySubject(context.Context, string, int) ([]Session, error)
+}
+
+// RefreshRotator is the durable concurrency boundary for refresh-token
+// rotation. Implementations must serialize the callback for one session and
+// persist its returned session atomically.
+type RefreshRotator interface {
+	RotateRefreshToken(context.Context, string, func(context.Context, Session) (Session, error)) (Session, error)
 }
 type MemoryStore struct {
 	mu     sync.RWMutex
@@ -111,6 +119,52 @@ func (s *PostgresStore) Update(ctx context.Context, value Session) error {
 	}
 	return nil
 }
+func (s *PostgresStore) RotateRefreshToken(ctx context.Context, id string, rotate func(context.Context, Session) (Session, error)) (Session, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Session{}, err
+	}
+	defer tx.Rollback()
+	current, err := scanSession(tx.QueryRowContext(ctx, `SELECT id, subject, email, application_code, permissions, refresh_token_ciphertext, expires_at, version, revoked_at FROM authentication_sessions WHERE id=$1 FOR UPDATE`, id))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Session{}, ErrNotFound
+		}
+		return Session{}, err
+	}
+	if current.Revoked || !time.Now().Before(current.ExpiresAt) {
+		return Session{}, ErrNotFound
+	}
+	value, err := rotate(ctx, current)
+	if err != nil {
+		if errors.Is(err, ErrRefreshReuse) {
+			if _, revokeErr := tx.ExecContext(ctx, `UPDATE authentication_sessions SET revoked_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=$1 AND revoked_at IS NULL`, id); revokeErr != nil {
+				return Session{}, revokeErr
+			}
+			if commitErr := tx.Commit(); commitErr != nil {
+				return Session{}, commitErr
+			}
+		}
+		return Session{}, err
+	}
+	permissions, err := json.Marshal(value.Permissions)
+	if err != nil {
+		return Session{}, err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE authentication_sessions SET email=$2, permissions=$3, refresh_token_ciphertext=$4, expires_at=$5, version=version+1, updated_at=CURRENT_TIMESTAMP WHERE id=$1 AND version=$6 AND revoked_at IS NULL`, value.ID, value.Email, permissions, value.RefreshTokenCiphertext, value.ExpiresAt, current.Version)
+	if err != nil {
+		return Session{}, err
+	}
+	count, err := result.RowsAffected()
+	if err != nil || count != 1 {
+		return Session{}, ErrConflict
+	}
+	if err := tx.Commit(); err != nil {
+		return Session{}, err
+	}
+	value.Version = current.Version + 1
+	return value, nil
+}
 func (s *PostgresStore) Revoke(ctx context.Context, id string) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE authentication_sessions SET revoked_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=$1 AND revoked_at IS NULL`, id)
 	if err != nil {
@@ -157,6 +211,25 @@ func (s *MemoryStore) Update(_ context.Context, value Session) error {
 	value.Version++
 	s.values[value.ID] = value
 	return nil
+}
+func (s *MemoryStore) RotateRefreshToken(ctx context.Context, id string, rotate func(context.Context, Session) (Session, error)) (Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, ok := s.values[id]
+	if !ok || current.Revoked || !time.Now().Before(current.ExpiresAt) {
+		return Session{}, ErrNotFound
+	}
+	value, err := rotate(ctx, current)
+	if err != nil {
+		if errors.Is(err, ErrRefreshReuse) {
+			current.Revoked = true
+			s.values[id] = current
+		}
+		return Session{}, err
+	}
+	value.Version = current.Version + 1
+	s.values[id] = value
+	return value, nil
 }
 
 func (s *MemoryStore) ListBySubject(_ context.Context, subject string, limit int) ([]Session, error) {
@@ -209,6 +282,24 @@ func (s *PostgresStore) ConsumeLoginTransaction(ctx context.Context, state strin
 		return LoginTransaction{}, err
 	}
 	value.State = state
+	return value, nil
+}
+
+type sessionScanner interface{ Scan(...any) error }
+
+func scanSession(row sessionScanner) (Session, error) {
+	var value Session
+	var permissions []byte
+	var refreshToken sql.NullString
+	var revokedAt sql.NullTime
+	err := row.Scan(&value.ID, &value.Subject, &value.Email, &value.ApplicationCode, &permissions, &refreshToken, &value.ExpiresAt, &value.Version, &revokedAt)
+	if err != nil {
+		return Session{}, err
+	}
+	if err := json.Unmarshal(permissions, &value.Permissions); err != nil {
+		return Session{}, err
+	}
+	value.RefreshTokenCiphertext, value.Revoked = refreshToken.String, revokedAt.Valid
 	return value, nil
 }
 func (s *MemoryStore) Revoke(_ context.Context, id string) error {

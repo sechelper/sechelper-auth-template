@@ -1,0 +1,11 @@
+FROM golang:1.26.8 AS build
+WORKDIR /src/api
+COPY api/go.mod api/go.sum ./
+RUN go mod download
+COPY api ./
+RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/mock-idp ./cmd/mock-idp
+
+FROM gcr.io/distroless/base-debian12
+COPY --from=build /out/mock-idp /app/mock-idp
+USER nonroot:nonroot
+ENTRYPOINT ["/app/mock-idp"]

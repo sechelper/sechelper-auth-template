@@ -1,13 +1,18 @@
 import { useAuth } from "../modules/auth/AuthProvider.jsx";
-import { GlobalErrorPage } from "../../../shared/error-pages/GlobalErrorPage.jsx";
+import { GlobalErrorPage } from "../../shared/error-pages/GlobalErrorPage.jsx";
+import { publicBusinessRoutes, validatePublicBusinessModules } from "./public-business-modules.js";
+
+validatePublicBusinessModules();
 
 export function App() {
   const { state, login, logout, refresh, refreshSession } = useAuth();
   const pathname = window.location.pathname.replace(/\/$/, "") || "/";
+  const businessRoute = publicBusinessRoutes().find((route) => route.path === pathname);
 
   if (pathname === "/403") return <GlobalErrorPage code={403} />;
   if (pathname === "/404") return <GlobalErrorPage code={404} />;
   if (pathname === "/500" || state.status === "error") return <GlobalErrorPage code={500} onAction={refresh} />;
+  if (businessRoute) { const BusinessPage = businessRoute.element; return <BusinessPage />; }
   if (pathname !== "/") return <GlobalErrorPage code={404} />;
 
   return (

@@ -22,6 +22,7 @@ type Config struct {
 	Session   SessionConfig   `mapstructure:"session"`
 	RateLimit RateLimitConfig `mapstructure:"rateLimit"`
 	CORS      CORSConfig      `mapstructure:"cors"`
+	Security  SecurityConfig  `mapstructure:"security"`
 	Log       LogConfig       `mapstructure:"log"`
 }
 type AppConfig struct{ Name, Environment, Version, ListenAddr, PublicWebOrigin, APIOrigin, PrimaryDomain, TestDomainSuffix, RedisURL string }
@@ -53,6 +54,10 @@ type SessionConfig struct {
 	SameSite, EncryptionKey string
 }
 type CORSConfig struct{ AllowedOrigins []string }
+type SecurityConfig struct {
+	TrustedProxyCIDRs []string `mapstructure:"trustedProxyCidrs"`
+	MetricsToken      string   `mapstructure:"metricsToken"`
+}
 type RateLimitConfig struct {
 	LoginPerMinute    int `mapstructure:"loginPerMinute"`
 	CallbackPerMinute int `mapstructure:"callbackPerMinute"`
@@ -126,7 +131,7 @@ func envBindings() map[string]string {
 		"server.host": "SERVER_HOST", "server.port": "SERVER_PORT", "server.address": "LISTEN_ADDR", "server.readTimeout": "SERVER_READ_TIMEOUT", "server.writeTimeout": "SERVER_WRITE_TIMEOUT", "server.idleTimeout": "SERVER_IDLE_TIMEOUT", "server.shutdownTimeout": "SERVER_SHUTDOWN_TIMEOUT",
 		"database.driver": "DATABASE_DRIVER", "database.host": "DATABASE_HOST", "database.port": "DATABASE_PORT", "database.name": "DATABASE_NAME", "database.user": "DATABASE_USER", "database.password": "DATABASE_PASSWORD", "database.sslMode": "DATABASE_SSL_MODE",
 		"identity.issuer": "IDENTITY_ISSUER", "identity.authorizationEndpoint": "IDENTITY_AUTHORIZATION_ENDPOINT", "identity.tokenEndpoint": "IDENTITY_TOKEN_ENDPOINT", "identity.userinfoEndpoint": "IDENTITY_USERINFO_ENDPOINT", "identity.jwksUrl": "IDENTITY_JWKS_URL", "identity.revocationEndpoint": "IDENTITY_REVOCATION_ENDPOINT", "identity.endSessionEndpoint": "IDENTITY_END_SESSION_ENDPOINT", "identity.audience": "IDENTITY_AUDIENCE", "identity.clientId": "IDENTITY_CLIENT_ID", "identity.clientSecret": "IDENTITY_CLIENT_SECRET", "identity.redirectUri": "IDENTITY_REDIRECT_URI", "identity.applicationCode": "IDENTITY_APPLICATION_CODE", "identity.scopes": "IDENTITY_SCOPES",
-		"manifest.syncInterval": "MANIFEST_SYNC_INTERVAL", "session.cookieName": "SESSION_COOKIE_NAME", "session.ttl": "SESSION_TTL", "session.secure": "SESSION_SECURE", "session.sameSite": "SESSION_SAME_SITE", "session.encryptionKey": "SESSION_ENCRYPTION_KEY", "cors.allowedOrigins": "ALLOWED_ORIGINS", "log.mode": "LOG_MODE", "log.encoding": "LOG_ENCODING", "log.level": "LOG_LEVEL", "log.output": "LOG_OUTPUT", "log.timeKey": "LOG_TIME_KEY", "log.levelKey": "LOG_LEVEL_KEY", "log.messageKey": "LOG_MESSAGE_KEY", "log.callerKey": "LOG_CALLER_KEY", "log.stacktraceKey": "LOG_STACKTRACE_KEY", "log.timeEncoding": "LOG_TIME_ENCODING", "log.levelEncoding": "LOG_LEVEL_ENCODING", "log.development": "LOG_DEVELOPMENT", "log.disableCaller": "LOG_DISABLE_CALLER", "log.disableStacktrace": "LOG_DISABLE_STACKTRACE", "log.sampling": "LOG_SAMPLING", "log.retentionDays": "LOG_RETENTION_DAYS", "log.maxSizeMB": "LOG_MAX_SIZE_MB", "log.maxBackups": "LOG_MAX_BACKUPS", "log.maxAgeDays": "LOG_MAX_AGE_DAYS", "log.compress": "LOG_COMPRESS", "log.debug": "DEBUG",
+		"manifest.syncInterval": "MANIFEST_SYNC_INTERVAL", "session.cookieName": "SESSION_COOKIE_NAME", "session.ttl": "SESSION_TTL", "session.secure": "SESSION_SECURE", "session.sameSite": "SESSION_SAME_SITE", "session.encryptionKey": "SESSION_ENCRYPTION_KEY", "cors.allowedOrigins": "ALLOWED_ORIGINS", "security.trustedProxyCidrs": "TRUSTED_PROXY_CIDRS", "security.metricsToken": "METRICS_TOKEN", "log.mode": "LOG_MODE", "log.encoding": "LOG_ENCODING", "log.level": "LOG_LEVEL", "log.output": "LOG_OUTPUT", "log.timeKey": "LOG_TIME_KEY", "log.levelKey": "LOG_LEVEL_KEY", "log.messageKey": "LOG_MESSAGE_KEY", "log.callerKey": "LOG_CALLER_KEY", "log.stacktraceKey": "LOG_STACKTRACE_KEY", "log.timeEncoding": "LOG_TIME_ENCODING", "log.levelEncoding": "LOG_LEVEL_ENCODING", "log.development": "LOG_DEVELOPMENT", "log.disableCaller": "LOG_DISABLE_CALLER", "log.disableStacktrace": "LOG_DISABLE_STACKTRACE", "log.sampling": "LOG_SAMPLING", "log.retentionDays": "LOG_RETENTION_DAYS", "log.maxSizeMB": "LOG_MAX_SIZE_MB", "log.maxBackups": "LOG_MAX_BACKUPS", "log.maxAgeDays": "LOG_MAX_AGE_DAYS", "log.compress": "LOG_COMPRESS", "log.debug": "DEBUG",
 		"rateLimit.loginPerMinute": "RATE_LIMIT_LOGIN_PER_MINUTE", "rateLimit.callbackPerMinute": "RATE_LIMIT_CALLBACK_PER_MINUTE", "rateLimit.refreshPerMinute": "RATE_LIMIT_REFRESH_PER_MINUTE",
 	}
 }
@@ -171,8 +176,8 @@ func Validate(c Config) error {
 			return fmt.Errorf("invalid %s", name)
 		}
 	}
-	if u, err := url.Parse(c.Identity.JWKSURL); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
-		return errors.New("identity.jwksUrl must be an HTTPS URL without credentials")
+	if u, err := url.Parse(c.Identity.JWKSURL); err != nil || (u.Scheme != "https" && !(c.App.Environment != "production" && u.Scheme == "http")) || u.Host == "" || u.User != nil {
+		return errors.New("identity.jwksUrl must be an HTTPS URL without credentials in production; HTTP is allowed only for development/test")
 	}
 	redirect, err := url.Parse(c.Identity.RedirectURI)
 	if err != nil || redirect.Scheme == "" || redirect.Host == "" || redirect.Path != "/v1/auth/callback" {
@@ -196,6 +201,9 @@ func Validate(c Config) error {
 	}
 	if c.App.Environment == "production" && strings.TrimSpace(c.App.RedisURL) == "" {
 		return errors.New("app.redisUrl is required in production")
+	}
+	if c.App.Environment == "production" && strings.TrimSpace(c.Security.MetricsToken) == "" {
+		return errors.New("security.metricsToken is required in production")
 	}
 	if c.Log.RetentionDays <= 0 || c.Log.MaxSizeMB <= 0 || c.Log.MaxBackups <= 0 || c.Log.MaxAgeDays <= 0 {
 		return errors.New("log rotation limits must be positive")

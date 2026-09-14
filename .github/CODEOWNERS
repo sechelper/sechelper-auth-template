@@ -1,0 +1,13 @@
+# Framework Core requires framework-owner review.
+/api/internal/platform/ @framework-owner
+/api/internal/modules/authentication/ @framework-owner
+/api/internal/modules/authorization/ @framework-owner
+/api/internal/modules/manifest/ @framework-owner
+/api/internal/modules/audit/ @framework-owner
+/api/internal/modules/account/ @framework-owner
+/api/internal/modules/operations/ @framework-owner
+/api/cmd/server/main.go @framework-owner
+/web/src/app/ @framework-owner
+/web/src/platform/ @framework-owner
+/web/admin/src/app/ @framework-owner
+/web/admin/src/platform/ @framework-owner

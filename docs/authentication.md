@@ -24,7 +24,7 @@
 
 `/v1/auth/login`、`/v1/auth/callback` 和 `/v1/auth/refresh` 由 `rateLimit` 配置限流。生产使用 Redis 计数器，开发环境在未配置 Redis 时使用进程内计数器；超过限制返回 `429 RATE_LIMITED` 和 `Retry-After`。
 
-服务端已提供 `POST /v1/auth/refresh`。Refresh Token 只以 AES-GCM 密文保存在 PostgreSQL，密钥由 `SESSION_ENCRYPTION_KEY` 注入，浏览器不接触 Refresh Token。统一认证平台返回新的 Refresh Token 时，服务端替换旧密文；未返回时保留原有密文。
+服务端已提供 `POST /v1/auth/refresh`。Refresh Token 只以 AES-GCM 密文保存在 PostgreSQL，密钥由 `SESSION_ENCRYPTION_KEY` 注入，浏览器不接触 Refresh Token。生产 PostgreSQL Store 会在事务中锁定当前 Session 行，完成 Provider 刷新、密文替换和版本递增，跨实例不依赖进程内互斥锁。统一认证平台返回新的 Refresh Token 时，服务端替换旧密文；未返回时保留原有密文。Provider 明确返回 OAuth `invalid_grant` 时视为 Rotation Reuse，服务端在同一事务内撤销该 Session，客户端必须重新登录；网络超时和其他 Provider 错误不会静默授权。
 
 Refresh Rotation 的确定性回归测试位于 `api/internal/modules/authentication/application/service_test.go`。测试使用 Mock Identity Provider 固定返回两代 token，不依赖浏览器 Cookie 或等待 Session 自然过期，验证 Session 有效期更新、Refresh Token 密文轮换，以及旧 token 被拒绝。
 

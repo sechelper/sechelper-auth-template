@@ -35,6 +35,14 @@ type TokenSet struct {
 	TokenType    string `json:"token_type"`
 	ExpiresIn    int    `json:"expires_in"`
 }
+type TokenError struct {
+	StatusCode int
+	ErrorCode  string
+}
+
+func (e *TokenError) Error() string {
+	return fmt.Sprintf("identity token rejected: http %d (%s)", e.StatusCode, e.ErrorCode)
+}
 
 type IDTokenClaims struct {
 	Nonce string `json:"nonce"`
@@ -177,7 +185,11 @@ func (c *Client) doToken(req *http.Request) (TokenSet, error) {
 		return TokenSet{}, err
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return TokenSet{}, fmt.Errorf("identity token rejected: http %d", res.StatusCode)
+		var payload struct {
+			Error string `json:"error"`
+		}
+		_ = json.Unmarshal(body, &payload)
+		return TokenSet{}, &TokenError{StatusCode: res.StatusCode, ErrorCode: payload.Error}
 	}
 	var out TokenSet
 	if err := json.Unmarshal(body, &out); err != nil || out.AccessToken == "" {

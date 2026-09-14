@@ -11,5 +11,7 @@
 - [部署](deployment.md)
 - [统一认证平台集成](integrations.md)
 - [AI 交接说明](ai-context.md)
-- [订单示例模块](orders.md)
+- [订单示例模块](orders.md)（仅示例，不属于框架正式运行路径）
+- [业务模块开发模板](business-module-template.md)
+- [开发环境与质量门禁](development-workflow.md)
 - [OpenAPI](contracts/openapi.yaml)

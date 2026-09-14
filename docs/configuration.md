@@ -6,7 +6,9 @@
 
 ## YAML 结构
 
-当前分组为 `app`、`server`、`database`、`identity`、`manifest`、`session`、`rateLimit`、`cors` 和 `log`，键名使用 lower-camel-case；未知键会导致启动失败。数据库连接由 `database.host/port/name/user/password/sslMode` 在内存中组装，禁止使用含凭据的 DSN。`manifest` 仅配置同步周期；Manifest API 使用 `identity.clientId/clientSecret` 获取 access token。
+当前分组为 `app`、`server`、`database`、`identity`、`manifest`、`session`、`rateLimit`、`cors`、`security` 和 `log`，键名使用 lower-camel-case；未知键会导致启动失败。数据库连接由 `database.host/port/name/user/password/sslMode` 在内存中组装，禁止使用含凭据的 DSN。`manifest` 仅配置同步周期；Manifest API 使用 `identity.clientId/clientSecret` 获取 access token。
+
+`security.trustedProxyCidrs` 是唯一允许应用信任 `X-Forwarded-Host` 的来源网络；未命中该列表时，应用忽略转发主机并使用 TCP 请求地址中的 Host。`security.metricsToken` 在 production 必须通过环境变量 `METRICS_TOKEN` 提供，`/metrics` 只接受对应的 Bearer Token。Host 必须匹配 `app.apiOrigin` 或 `app.publicWebOrigin`，Origin 必须匹配 CORS 白名单。
 
 环境变量覆盖映射如下（环境变量优先于 YAML）：
 

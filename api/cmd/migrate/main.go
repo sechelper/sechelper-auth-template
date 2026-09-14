@@ -32,6 +32,20 @@ func main() {
 	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`); err != nil {
 		fail(err)
 	}
+	// Serialize migration runners across replicas. The advisory lock is held
+	// for the complete migration process and released by the connection.
+	lockConn, err := db.Conn(ctx)
+	if err != nil {
+		fail(fmt.Errorf("open migration lock connection: %w", err))
+	}
+	if _, err := lockConn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtextextended('sechelper-auth-template:migrations', 0))`); err != nil {
+		_ = lockConn.Close()
+		fail(fmt.Errorf("acquire migration lock: %w", err))
+	}
+	defer func() {
+		_, _ = lockConn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtextextended('sechelper-auth-template:migrations', 0))`)
+		_ = lockConn.Close()
+	}()
 
 	dir := os.Getenv("MIGRATIONS_DIR")
 	if dir == "" {
@@ -44,6 +58,10 @@ func main() {
 	sort.Strings(entries)
 	for _, path := range entries {
 		name := filepath.Base(path)
+		// Example business migrations are opt-in and never part of the framework schema.
+		if name == "002_orders.sql" && os.Getenv("INCLUDE_EXAMPLE_MIGRATIONS") != "1" {
+			continue
+		}
 		contents, err := os.ReadFile(path)
 		if err != nil {
 			fail(err)

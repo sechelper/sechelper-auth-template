@@ -147,9 +147,11 @@ func (s *Service) Refresh(ctx context.Context, id string) (result session.Sessio
 		}
 		_ = s.auditRecorder.Record(ctx, auditdomain.Event{ID: "evt-" + eventID, EventType: "AUTH_SESSION_REFRESH_FAILED", Outcome: "failure", ApplicationCode: s.applicationCode, ResourceType: "session", ResourceID: id, Action: "refresh", Source: "api"})
 	}()
-	// The local lock prevents refresh-token rotation races inside one process.
-	// The persistent store must still provide an optimistic/concurrent update
-	// guard for multi-instance deployments.
+	if rotator, ok := s.sessions.(session.RefreshRotator); ok {
+		return rotator.RotateRefreshToken(ctx, id, s.rotateSession)
+	}
+	// Compatibility path for custom stores. Production uses the durable
+	// RotateRefreshToken implementation above.
 	s.refreshMu.Lock()
 	defer s.refreshMu.Unlock()
 	current, err := s.sessions.Get(ctx, id)
@@ -159,12 +161,29 @@ func (s *Service) Refresh(ctx context.Context, id string) (result session.Sessio
 	if current.RefreshTokenCiphertext == "" {
 		return session.Session{}, ErrRefreshUnavailable
 	}
+	current, err = s.rotateSession(ctx, current)
+	if err != nil {
+		return session.Session{}, err
+	}
+	if err := s.sessions.Update(ctx, current); err != nil {
+		return session.Session{}, err
+	}
+	return current, nil
+}
+func (s *Service) rotateSession(ctx context.Context, current session.Session) (session.Session, error) {
+	if current.RefreshTokenCiphertext == "" {
+		return session.Session{}, ErrRefreshUnavailable
+	}
 	raw, err := s.protector.Decrypt(current.RefreshTokenCiphertext)
 	if err != nil {
 		return session.Session{}, err
 	}
 	tokens, err := s.identity.RefreshToken(ctx, raw)
 	if err != nil {
+		var tokenErr *identity.TokenError
+		if errors.As(err, &tokenErr) && tokenErr.ErrorCode == "invalid_grant" {
+			return session.Session{}, session.ErrRefreshReuse
+		}
 		return session.Session{}, err
 	}
 	if tokens.RefreshToken != "" {
@@ -178,9 +197,6 @@ func (s *Service) Refresh(ctx context.Context, id string) (result session.Sessio
 		ttl = time.Duration(tokens.ExpiresIn) * time.Second
 	}
 	current.ExpiresAt = time.Now().Add(ttl)
-	if err := s.sessions.Update(ctx, current); err != nil {
-		return session.Session{}, err
-	}
 	return current, nil
 }
 func (s *Service) Get(ctx context.Context, id string) (session.Session, error) {

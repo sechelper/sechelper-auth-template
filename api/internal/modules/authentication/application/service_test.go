@@ -14,6 +14,7 @@ type rotationIdentity struct {
 	refreshCalls []string
 	revoked      []string
 	responses    map[string]identity.TokenSet
+	invalidGrant bool
 }
 
 func (f *rotationIdentity) AuthorizationURL(state, nonce, challenge string) (string, error) {
@@ -33,6 +34,9 @@ func (f *rotationIdentity) GetAuthorization(context.Context, string) (identity.A
 }
 func (f *rotationIdentity) RefreshToken(_ context.Context, value string) (identity.TokenSet, error) {
 	f.refreshCalls = append(f.refreshCalls, value)
+	if f.invalidGrant {
+		return identity.TokenSet{}, &identity.TokenError{StatusCode: 400, ErrorCode: "invalid_grant"}
+	}
 	response, ok := f.responses[value]
 	if !ok {
 		return identity.TokenSet{}, errors.New("refresh token reuse rejected")
@@ -91,5 +95,29 @@ func TestRefreshRotatesTokenAndExtendsSessionWithoutWaitingForExpiry(t *testing.
 	}
 	if len(fake.revoked) != 1 || fake.revoked[0] != "refresh-token-2" {
 		t.Fatalf("revoked tokens = %#v, want rotated token", fake.revoked)
+	}
+}
+
+func TestRefreshInvalidGrantRevokesSessionAsReuseDetection(t *testing.T) {
+	ctx := context.Background()
+	store := session.NewMemoryStore()
+	protector, err := session.NewTokenProtector("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ciphertext, err := protector.Encrypt("rotated-away-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Create(ctx, session.Session{ID: "session-reuse", Subject: "user-1", RefreshTokenCiphertext: ciphertext, ExpiresAt: time.Now().Add(time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	fake := &rotationIdentity{responses: map[string]identity.TokenSet{}, invalidGrant: true}
+	service := NewService(fake, store, store, protector, time.Hour, "app-1")
+	if _, err := service.Refresh(ctx, "session-reuse"); !errors.Is(err, session.ErrRefreshReuse) {
+		t.Fatalf("Refresh() error = %v, want ErrRefreshReuse", err)
+	}
+	if _, err := store.Get(ctx, "session-reuse"); !errors.Is(err, session.ErrNotFound) {
+		t.Fatalf("session after reuse detection = %v, want revoked/not found", err)
 	}
 }

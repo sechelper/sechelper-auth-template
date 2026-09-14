@@ -1,5 +1,12 @@
 # 远程测试环境
 
+## 后台导航分组远程重新部署（2026-09-14 19:56 Asia/Shanghai）
+
+- 当前变更：同步 `admin/src/app/navigation.jsx`，移除“权限与资源”分组，将权限 Manifest、权限清单、资源目录和活跃会话归入“账号与安全”，将订单归入同级的“业务运营”。
+- 远程目标：`root@47.116.4.57:/opt/sechelper-auth-template`；仅重建并替换后台静态资源，未修改 API、PostgreSQL、Redis、Nginx、`.env`、`config.yaml` 或业务数据。
+- 验证：远程 Admin Vite 生产构建通过；`order-test.service` 为 active；`/healthz`、`/readyz` 和 `/admin/` 返回 HTTP 200；远程静态资源已包含“账号与安全”和“业务运营”。
+- 部署备份：`/opt/sechelper-auth-template/.deploy-backup-navigation-20260914T1956`，包含部署前导航文件和后台静态资源。
+
 ## Frest 左侧导航远程构建验证（2026-09-14 18:13 Asia/Shanghai）
 
 - 验证源码：本地未提交工作树中的 `admin/src/app/navigation.jsx`、`admin/src/app/components.jsx`、`admin/src/style.css` 及共享错误页依赖；本次仅构建验证，未发布到线上。
@@ -31,6 +38,13 @@
 - 当前变更：将当前会话、访问控制诊断和系统状态内容集中迁移到 `admin/src/modules/dashboard/DashboardPage.jsx`；移除三个独立后台导航入口与直达路由，保留活跃会话、权限清单和审计页面。
 - 远程临时 Admin 生产构建通过，Vite `7.1.7` 构建包生成成功；本次仅构建验证，未发布线上、未重启服务，未修改 PostgreSQL、Redis、Nginx、运行配置或业务数据。
 
+## 当前工作树全量同步重新部署（2026-09-14 19:45 Asia/Shanghai）
+
+- 已按当前本地工作树全量同步到 `root@47.116.4.57:/opt/sechelper-auth-template`，排除 `.git/`、`.env`、`config.yaml`、依赖缓存、构建产物和日志；远程新增同步 `api/internal/platform/security/` 与 `docs/capability-matrix.md`。
+- 远程 Go 全量测试、API 编译、`web` 与 `admin` 生产构建均通过；`order-test.service` 已重启并 active，Nginx 配置检查成功并 reload。
+- 重启瞬间首次健康探测返回 502，延迟复验恢复正常：`/healthz`、`/readyz`、前台、`/admin/` 和 Logo 静态资源均 HTTP 200；`/v1/auth/session` 返回未认证状态。
+- 部署备份：`/opt/sechelper-auth-template/.deploy-backup-full-20260914T194526`。PostgreSQL、Redis、`.env`、`config.yaml` 和业务数据未修改，未执行数据库迁移。
+
 ## 项目身份
 
 ## Manifest 对接修订与验证（2026-09-14 17:14 Asia/Shanghai）
@@ -57,8 +71,8 @@
 - 发现并修复：Manifest 状态响应补充 lowerCamelCase JSON 字段；后台登出后不再被自动登录副作用带回 IdP。
 - 测试数据：曾为当前测试账号增加临时本地会话权限以验证后台成功路径；测试结束后已撤销该账号的测试会话、清空临时权限并清理对应用户会话索引。
 - 最终状态：`order-test.service` active，`/healthz` 返回 200，`/readyz` 返回 200；PostgreSQL、Redis 和现有业务数据未重建或清空。
-- 可重复 Refresh Rotation 测试：`go test ./internal/modules/authentication/application -run TestRefreshRotatesTokenAndExtendsSessionWithoutWaitingForExpiry` 使用 Mock Identity Provider 固定返回两代 token，验证 Session 有效期更新、密文轮换和旧 token 拒绝；本地与远程全量 Go 测试均通过。
-- 多实例认证基础设施：新增 `api/migrations/003_authentication_transactions.sql`，测试数据库已应用 `authentication_login_transactions` 和 `authentication_sessions.version`；远程 Go 全量测试通过，服务重启后 readiness 正常。
+- 可重复 Refresh Rotation 测试：`go test ./internal/modules/authentication/application -run 'TestRefresh'` 使用 Mock Identity Provider 固定返回两代 token，验证 Session 有效期更新、密文轮换，以及 Provider 返回 `invalid_grant` 时 Session 被撤销；本地全量 Go 测试通过。
+- 多实例认证基础设施：PostgreSQL Store 通过事务和 `SELECT ... FOR UPDATE` 对单个 Session 的 Refresh Rotation 加锁，提交新密文和版本递增；`api/migrations/003_authentication_transactions.sql` 提供 `authentication_sessions.version`。真实多副本和测试数据库并发验证尚未在本轮执行。
 - 认证限流：测试服务注入登录/回调/刷新限额 `10/20/30` 每分钟；连续请求 `/v1/auth/login` 的结果为前 10 次 `302`、第 11 次 `429`，测试事务随后已清理。
 - 浏览器 E2E：新增 `e2e/` Playwright 工程和 CI workflow；公开测试覆盖前台壳、未认证 Session/Authorization、metrics，真实 IdP 登录/登出仅在注入 `E2E_USERNAME`/`E2E_PASSWORD` 时启用。当前 macOS 沙箱中的 Chromium 无头启动被系统 Mach port 权限阻断，API-only E2E 已通过；CI 使用 Ubuntu Chromium。
 - 运行指标：测试服务 `/metrics` 已由 Nginx 代理，暴露认证请求、限流和远端 revoke 失败计数器；告警规则位于 `deploy/prometheus/auth-template-alerts.yml`。
@@ -143,3 +157,12 @@
 - 全局错误页按键几何与交互远程部署：2026-09-14 01:37 Asia/Shanghai 在远程主机同步 `shared/error-pages/error-pages.css`，远程分别完成前台与后台 `npm ci --no-audit --no-fund` 和 `npm run build`，更新 `/opt/sechelper-auth-template/web/dist` 与 `/opt/sechelper-auth-template/web/dist/admin`。部署前备份位于 `/opt/sechelper-auth-template/.deploy-backup-dpad-face-buttons-20260914T013759`。浏览器刷新验收确认十字键四个三角通过 CSS 几何定位居中，A/B/Y/X 按固定菱形位置排列；点击“开始”后方块运行，点击“下移”可响应；`/healthz`、`/readyz` 返回成功；`/v1/auth/session` 返回 `{"authenticated":false}`；未认证访问 `/v1/authorization/me` 返回 HTTP 401；`order-test.service` 保持 active。Go 服务、PostgreSQL、Redis、业务容器和 Nginx 配置未修改，未重启服务或重载 Nginx。
 - 全局错误页十字键修复远程部署：2026-09-14 01:34 Asia/Shanghai 在远程主机同步 `shared/error-pages/error-pages.css`，远程分别完成前台与后台 `npm ci --no-audit --no-fund` 和 `npm run build`，更新 `/opt/sechelper-auth-template/web/dist` 与 `/opt/sechelper-auth-template/web/dist/admin`。部署前备份位于 `/opt/sechelper-auth-template/.deploy-backup-dpad-layout-20260914T013401`。浏览器验收确认方向键恢复为完整十字底板、箭头位置正确，A/B/X/Y、选择/开始和掌机布局正常；点击“开始”后游戏启动，点击“下移”后方块正常响应；`/healthz`、`/readyz` 返回成功；`/v1/auth/session` 返回 `{"authenticated":false}`；未认证访问 `/v1/authorization/me` 返回 HTTP 401；`order-test.service` 保持 active。Go 服务、PostgreSQL、Redis、业务容器和 Nginx 配置未修改，未重启服务或重载 Nginx。
 - X 键垂直对齐修复远程部署：2026-09-14 01:55 Asia/Shanghai 在远程主机同步 `shared/error-pages/error-pages.css`，将 X 键横坐标由 `23px` 调整为与 B 键相同的 `32px`，远程分别完成前台与后台 `npm ci --no-audit --no-fund` 和 `npm run build`，更新 `/opt/sechelper-auth-template/web/dist` 与 `/opt/sechelper-auth-template/web/dist/admin`。浏览器实测 B、X 按钮中心横坐标均为 `759px`、尺寸均为 `35px × 35px`，点击“开始”和 X 键均正常；`/healthz`、`/readyz` 返回成功，`order-test.service` 保持 active，`nginx -t` 通过。Go 服务、PostgreSQL、Redis、业务容器和 Nginx 配置未修改，未重启服务或重载 Nginx；回滚可使用上一版按键布局备份 `/opt/sechelper-auth-template/.deploy-backup-action-angle-20260914T014728`。
+# 最新全量重建部署（2026-09-14 20:51 Asia/Shanghai）
+
+- 目标：`root@47.116.4.57:/opt/sechelper-auth-template`，业务服务 `order-test.service`。
+- 数据库：仅重建项目专用 Compose 容器 `sechelper-auth-template-dev-postgres-1` 中的 `auth_template` 数据库；其他 PostgreSQL、Redis、业务容器和业务数据未操作。
+- 备份：`/opt/sechelper-auth-template/.deploy-backup-full-rebuild-20260914T204703/auth_template-before-rebuild.dump`，备份文件已确认非空。
+- 发布：当前工作树已排除 `.git/`、`.env`、`config.yaml`、依赖缓存、构建产物和日志后同步；远程 Go 全量测试、API/迁移编译、Web/Admin 测试和生产构建通过。
+- 数据库：显式使用 `MIGRATIONS_DIR=/opt/sechelper-auth-template/api/migrations` 应用全部 5 个迁移；`schema_migrations` 记录数为 5。
+- 验证：`order-test.service` active；`/healthz`、`/readyz`、前台 `/`、后台 `/admin/` 和 `/v1/auth/session` 均返回 HTTP 200；Nginx `nginx -t` 成功并已 reload。
+- 回滚：API 旧二进制和旧前端静态资源位于同一备份目录；数据库可使用上述 dump 恢复。未执行 Redis 清空或数据库之外的破坏性操作。

@@ -1,0 +1,75 @@
+# Local development configuration. Secrets and environment-specific overrides
+# are supplied by deploy/compose.dev.yaml and must not be committed here.
+app:
+  name: auth-template
+  environment: development
+  version: dev
+  listenAddr: 0.0.0.0:8080
+  publicWebOrigin: http://localhost:8088
+  apiOrigin: http://localhost:8080
+  primaryDomain: localhost
+  testDomainSuffix: -test
+  redisUrl: redis://redis:6379/0
+server:
+  host: 0.0.0.0
+  port: 8080
+  readTimeout: 10s
+  writeTimeout: 15s
+  idleTimeout: 60s
+  shutdownTimeout: 15s
+database:
+  driver: postgres
+  host: postgres
+  port: 5432
+  name: auth_template
+  user: app
+  sslMode: disable
+identity:
+  issuer: http://mock-idp:9000
+  authorizationEndpoint: http://mock-idp:9000/oauth/authorize
+  tokenEndpoint: http://mock-idp:9000/oauth/token
+  userinfoEndpoint: http://mock-idp:9000/oauth/userinfo
+  jwksUrl: http://mock-idp:9000/.well-known/jwks.json
+  revocationEndpoint: http://mock-idp:9000/oauth/revoke
+  endSessionEndpoint: http://mock-idp:9000/oauth2/logout
+  audience: business-api
+  redirectUri: http://localhost:8080/v1/auth/callback
+  scopes: [openid, profile, email]
+manifest:
+  syncInterval: 10m
+session:
+  cookieName: auth_template_session
+  ttl: 8h
+  secure: false
+  sameSite: Lax
+rateLimit:
+  loginPerMinute: 10
+  callbackPerMinute: 20
+  refreshPerMinute: 30
+cors:
+  allowedOrigins: ["http://localhost:8088"]
+security:
+  trustedProxyCidrs: [0.0.0.0/0]
+  metricsToken: local-metrics-token
+log:
+  mode: stdout
+  encoding: json
+  level: info
+  output: /tmp/auth-template.log
+  timeKey: ts
+  levelKey: level
+  messageKey: msg
+  callerKey: caller
+  stacktraceKey: stacktrace
+  timeEncoding: iso8601
+  levelEncoding: lowercase
+  development: true
+  disableCaller: false
+  disableStacktrace: true
+  sampling: false
+  retentionDays: 7
+  maxSizeMB: 10
+  maxBackups: 2
+  maxAgeDays: 7
+  compress: false
+  debug: false

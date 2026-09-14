@@ -1,6 +1,6 @@
 # 订单示例模块
 
-`api/internal/modules/orders/` 是框架的第一个业务接入示例。它只包含订单领域模型、查询用例、PostgreSQL Repository、HTTP DTO 和权限声明，不读取认证平台配置，也不直接访问 Session Store。
+订单是业务接入示例，不属于 Framework Core。默认服务、迁移、OpenAPI 和后台不加载它；需要验证业务接入时才显式启用示例。
 
 ## API
 

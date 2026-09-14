@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enforce framework/business boundaries
+        run: make architecture-check
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.8'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            web/admin/package-lock.json
+
+      - name: Go format check
+        working-directory: api
+        run: test -z "$(gofmt -l .)"
+
+      - name: Go tests
+        working-directory: api
+        run: go test ./...
+
+      - name: Web dependencies, tests, and build
+        working-directory: web
+        run: npm ci && npm test && npm run build
+
+      - name: Admin dependencies, tests, and build
+        working-directory: web/admin
+        run: npm ci && npm test && npm run build
+
+      - name: OpenAPI validation
+        run: npx --yes @redocly/cli@1.34.0 lint docs/contracts/openapi.yaml
+
+      - name: Production image build
+        run: docker build -f deploy/Dockerfile.api -t auth-template-api . && docker build -f deploy/Dockerfile.web -t auth-template-web . && docker build -f deploy/Dockerfile.mock-idp -t auth-template-mock-idp .

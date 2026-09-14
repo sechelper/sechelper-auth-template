@@ -8,6 +8,7 @@ config.yml
 node_modules/
 web/dist/
 admin/dist/
+web/admin/dist/
 e2e/test-results/
 e2e/playwright-report/
 coverage/

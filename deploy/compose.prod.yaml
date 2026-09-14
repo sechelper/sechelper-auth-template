@@ -14,15 +14,32 @@ services:
       IDENTITY_APPLICATION_CODE: ${IDENTITY_APPLICATION_CODE:?IDENTITY_APPLICATION_CODE is required}
       IDENTITY_JWKS_URL: ${IDENTITY_JWKS_URL:?IDENTITY_JWKS_URL is required}
       SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:?SESSION_ENCRYPTION_KEY is required}
+      METRICS_TOKEN: ${METRICS_TOKEN:?METRICS_TOKEN is required}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-127.0.0.1/32}
+    volumes:
+      - ../config.yaml:/app/config.yaml:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    expose: ["8080"]
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    command: ["/app/auth-template-migrate", "--config", "/app/config.yaml"]
+    environment:
+      APP_CONFIG_FILE: /app/config.yaml
+      APP_ENV: ${APP_ENV:?APP_ENV is required}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
     volumes:
       - ../config.yaml:/app/config.yaml:ro
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-    expose: ["8080"]
-    restart: unless-stopped
 
   web:
     build:

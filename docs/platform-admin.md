@@ -31,10 +31,10 @@ Session 主数据仍由 `authentication` 模块和 PostgreSQL Store 管理，Acc
 
 ## 前端共享能力
 
-`admin/src/shared/ui.jsx` 提供 `DataTable`、`EmptyState` 和 `RefreshButton`。页面需要自行处理加载、空数据、失败、重试和 mutation 状态，但统一使用这些基础组件保持一致体验。
+`web/admin/src/shared/ui.jsx` 提供 `DataTable`、`EmptyState` 和 `RefreshButton`。页面需要自行处理加载、空数据、失败、重试和 mutation 状态，但统一使用这些基础组件保持一致体验。
 
-管理端左侧导航采用 Frest Demo 1 的展开式菜单规格：固定 `260px` 宽度、`75px` 品牌区、`42px` 菜单行、分组标题、线性图标、淡蓝活动态和独立滚动区；桌面端支持收起为 `80px` 图标栏。导航内容、可见性和权限仍由 `admin/src/app/navigation.jsx` 与服务端会话权限控制，左上角继续使用 `CommunityBrand` 提供的 SECHELPER COMMUNITY 品牌锁定。
+管理端左侧导航采用 Frest Demo 1 的展开式菜单规格：固定 `260px` 宽度、`75px` 品牌区、`42px` 菜单行、分组标题、线性图标、淡蓝活动态和独立滚动区；桌面端支持收起为 `80px` 图标栏。导航内容、可见性和权限仍由 `web/admin/src/app/navigation.jsx` 与服务端会话权限控制，左上角继续使用 `CommunityBrand` 提供的 SECHELPER COMMUNITY 品牌锁定。
 
 顶部导航覆盖为参考页的 `62px` Frest 顶栏规格：与侧栏同色背景、左侧搜索入口、右侧语言/主题/快捷入口/通知图标和用户头像状态点；用户头像菜单承载刷新会话与退出操作，避免为复刻视觉而移除现有会话能力。
 
-左上角品牌锁定由 `admin/src/platform/brand/CommunityBrand.jsx` 提供，使用 `admin/public/assets/logo/logo.png` 中的 system-design 原始助安社区 Logo，显示“助安社区 - 模版演示”和 `SECHELPER COMMUNITY` 两行文字，并链接回应用入口。系统名来自 `globalThis.__APP_CONFIG__.systemName`，未注入时使用模板演示默认值。
+左上角品牌锁定由 `web/admin/src/platform/brand/CommunityBrand.jsx` 提供，使用 `web/admin/public/assets/logo/logo.png` 中的 system-design 原始助安社区 Logo，显示“助安社区 - 模版演示”和 `SECHELPER COMMUNITY` 两行文字，并链接回应用入口。系统名来自 `globalThis.__APP_CONFIG__.systemName`，未注入时使用模板演示默认值。

@@ -21,6 +21,6 @@
 
 ## 前端边界
 
-Dashboard 页面位于 `admin/src/modules/dashboard/`。管理台外壳、导航和权限守卫位于 `admin/src/app/`；订单、Manifest、活跃会话和审计页面分别由自己的业务模块负责。
+Dashboard 页面位于 `web/admin/src/modules/dashboard/`。管理台外壳、导航和权限守卫位于 `web/admin/src/app/`；订单、Manifest、活跃会话和审计页面分别由自己的业务模块负责。
 
 概览页将当前会话、系统状态、访问控制诊断和 Manifest 状态集中展示；系统状态由概览接口与运行状态接口共同提供。平台 Dashboard 可以跳转到业务模块，但不能读取或聚合业务模块数据库，也不能展示订单数量、订单金额、最近订单等业务指标。

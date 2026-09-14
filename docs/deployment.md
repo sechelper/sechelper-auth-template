@@ -32,13 +32,15 @@ APP_CONFIG_FILE=../config.yaml go run ./cmd/migrate
 
 当前 Session Store 使用 PostgreSQL；生产环境授权缓存使用 Redis。测试环境可根据 `REDIS_URL` 选择共享 Redis，开发环境留空时使用内存缓存。
 
+生产环境 API 启动前必须提供 `METRICS_TOKEN`。`/metrics` 不公开访问，只接受 `Authorization: Bearer <METRICS_TOKEN>`；反向代理来源网段通过 `TRUSTED_PROXY_CIDRS` 显式声明，应用只从这些网段信任 `X-Forwarded-Host`。
+
 ## 配置
 
 应用配置字段见 `config.example.yaml`，Docker/Compose 变量见 `.env.example`。真实配置由 `config.yaml` 或部署环境注入；Identity Client Secret、access token 和数据库凭据不进入 Git、镜像或前端构建产物。Manifest 同步复用 `IDENTITY_CLIENT_ID/IDENTITY_CLIENT_SECRET` 获取 Bearer access token，不再配置独立的 Manifest 凭据。
 
 ## 前后台发布
 
-前台位于 `web/`，构建到 `web/dist`；后台位于 `admin/`，构建到 `admin/dist`。测试环境将后台构建目录复制到 `web/dist/admin`，由主机 Nginx 在 `/admin/` 下提供服务；生产镜像由 `deploy/Dockerfile.web` 将两个构建产物分别复制到 `/usr/share/nginx/html` 和 `/usr/share/nginx/html/admin`。Nginx 必须将 `/admin/` 回退到后台 `index.html`，根路径回退到前台 `index.html`。
+前台位于 `web/`，构建到 `web/dist`；后台位于 `web/admin/`，构建到 `web/admin/dist`。两个目录仍是独立 Vite 项目，各自执行依赖安装和生产构建。生产镜像由 `deploy/Dockerfile.web` 将两个构建产物分别复制到 `/usr/share/nginx/html` 和 `/usr/share/nginx/html/admin`。Nginx 必须将 `/admin/` 回退到后台 `index.html`，根路径回退到前台 `index.html`。
 
 后台前端与前台共用 Go API 和 Session Cookie。后台入口要求 `admin:access`；订单和 Manifest API 继续由 Go 授权中间件进行最终权限校验。
 
@@ -48,7 +50,7 @@ APP_CONFIG_FILE=../config.yaml go run ./cmd/migrate
 curl --fail-with-body "$API_ORIGIN/healthz"
 curl --fail-with-body "$API_ORIGIN/readyz"
 curl -i "$API_ORIGIN/v1/auth/session"
-curl --fail-with-body "$API_ORIGIN/metrics"
+curl --fail-with-body -H "Authorization: Bearer $METRICS_TOKEN" "$API_ORIGIN/metrics"
 ```
 
 状态变更测试必须使用隔离测试账号和测试域名。生产环境不得执行测试账号、测试凭据或破坏性 smoke test。

@@ -76,7 +76,7 @@ func (h *Handler) refresh(c *gin.Context) {
 	value, err := h.service.Refresh(c.Request.Context(), h.cookie(c))
 	if err != nil {
 		status := http.StatusBadGateway
-		if errors.Is(err, session.ErrNotFound) || errors.Is(err, application.ErrRefreshUnavailable) {
+		if errors.Is(err, session.ErrNotFound) || errors.Is(err, application.ErrRefreshUnavailable) || errors.Is(err, session.ErrRefreshReuse) {
 			status = http.StatusUnauthorized
 		}
 		writeError(c, status, "SESSION_REFRESH_FAILED")

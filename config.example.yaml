@@ -49,7 +49,11 @@ rateLimit:
   callbackPerMinute: 20
   refreshPerMinute: 30
 cors:
-  allowedOrigins: [http://127.0.0.1:5173]
+  allowedOrigins: ["http://127.0.0.1:5173"]
+security:
+  trustedProxyCidrs: [127.0.0.1/32]
+  # Required in production; keep it in the deployment environment instead.
+  metricsToken: ""
 log:
   mode: file
   encoding: json

@@ -1,0 +1,74 @@
+# Viper application configuration. Secrets are injected through environment variables.
+# This file is not the Compose .env schema and contains no credentials.
+app:
+  name: auth-template
+  environment: development
+  version: dev
+  listenAddr: 127.0.0.1:8080
+  publicWebOrigin: http://127.0.0.1:5173
+  apiOrigin: http://127.0.0.1:8080
+  primaryDomain: example.com
+  testDomainSuffix: -test
+  redisUrl: ""
+server:
+  host: 127.0.0.1
+  port: 8080
+  readTimeout: 10s
+  writeTimeout: 15s
+  idleTimeout: 60s
+  shutdownTimeout: 15s
+database:
+  driver: postgres
+  host: 127.0.0.1
+  port: 5432
+  name: auth_template
+  user: app
+  sslMode: disable
+identity:
+  issuer: https://identity.example.com
+  authorizationEndpoint: https://identity.example.com/oauth/authorize
+  tokenEndpoint: https://identity.example.com/oauth/token
+  userinfoEndpoint: https://identity.example.com/oauth/userinfo
+  jwksUrl: https://identity.example.com/.well-known/jwks.json
+  revocationEndpoint: https://identity.example.com/oauth/revoke
+  endSessionEndpoint: https://identity.example.com/oauth2/logout
+  audience: business-api
+  redirectUri: http://127.0.0.1:8080/v1/auth/callback
+  scopes: [openid, profile, email]
+  # clientId, clientSecret, and applicationCode are environment-only.
+manifest:
+  syncInterval: 10m
+session:
+  cookieName: auth_template_session
+  ttl: 8h
+  secure: false
+  sameSite: Lax
+  # encryptionKey is environment-only; use 32 random bytes in RawStdEncoding.
+rateLimit:
+  loginPerMinute: 10
+  callbackPerMinute: 20
+  refreshPerMinute: 30
+cors:
+  allowedOrigins: [http://127.0.0.1:5173]
+log:
+  mode: file
+  encoding: json
+  level: info
+  output: logs/app.log
+  timeKey: ts
+  levelKey: level
+  messageKey: msg
+  callerKey: caller
+  stacktraceKey: stacktrace
+  timeEncoding: iso8601
+  levelEncoding: lowercase
+  development: false
+  disableCaller: false
+  disableStacktrace: true
+  sampling: false
+  retentionDays: 180
+  maxSizeMB: 100
+  maxBackups: 10
+  maxAgeDays: 180
+  compress: true
+  debug: false

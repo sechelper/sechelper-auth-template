@@ -1,0 +1,5 @@
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { authApi } from "./api.js";
+const AuthContext = createContext(null);
+export function AuthProvider({ children }) { const [state, setState] = useState({ status: "loading" }); const refresh = async () => { try { const session = await authApi.session(); if (!session.authenticated) { setState({ status: "unauthenticated" }); return; } const authorization = await authApi.authorization(); setState({ status: "authenticated", ...session, ...authorization.data, permissions: authorization.data?.permissions || [] }); } catch { setState({ status: "error" }); } }; useEffect(() => { refresh(); }, []); const value = useMemo(() => ({ state, hasPermission: (permission) => state.permissions?.includes(permission) || false, login: authApi.login, refresh, refreshSession: async () => { await authApi.refresh(); await refresh(); }, logout: async () => { await authApi.logout(); await refresh(); } }), [state]); return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>; }
+export function useAuth() { return useContext(AuthContext); }

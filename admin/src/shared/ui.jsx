@@ -1,0 +1,3 @@
+export function DataTable({ columns, rows, rowKey = (row) => row.id }) { return <div className="table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={rowKey(row)}>{columns.map((column) => <td key={column.key}>{column.render ? column.render(row) : row[column.key] || "—"}</td>)}</tr>)}</tbody></table></div>; }
+export function EmptyState({ title = "暂无数据", description = "当前没有可展示的记录。" }) { return <div className="empty"><strong>{title}</strong><span>{description}</span></div>; }
+export function RefreshButton({ onClick, busy }) { return <button className="text-button" onClick={onClick} disabled={busy}>{busy ? "刷新中…" : "刷新"}</button>; }

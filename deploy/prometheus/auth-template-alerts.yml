@@ -1,0 +1,27 @@
+groups:
+  - name: auth-template
+    rules:
+      - alert: AuthRateLimitDependencyErrors
+        expr: increase(auth_rate_limit_errors_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Authentication rate-limit backend is failing
+          description: Redis rate-limit errors are causing authentication requests to be rejected.
+      - alert: AuthRateLimitSpike
+        expr: increase(auth_rate_limited_total[10m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Authentication rate limiting has spiked
+          description: Investigate credential stuffing, callback replay, or an overly restrictive threshold.
+      - alert: AuthRemoteRevokeErrors
+        expr: increase(auth_remote_revoke_errors_total[10m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Remote identity token revocation failed
+          description: Local logout still completed, but the identity provider did not confirm remote revocation.

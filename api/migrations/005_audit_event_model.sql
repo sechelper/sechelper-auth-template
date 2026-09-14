@@ -1,0 +1,10 @@
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS event_type TEXT NOT NULL DEFAULT '';
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT '';
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS severity TEXT NOT NULL DEFAULT 'info';
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS outcome TEXT NOT NULL DEFAULT '';
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS reason_code TEXT NOT NULL DEFAULT '';
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS correlation_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT '';
+UPDATE audit_events SET event_type = CASE WHEN event_type = '' THEN action ELSE event_type END, outcome = CASE WHEN outcome = '' THEN result ELSE outcome END, category = CASE WHEN category = '' THEN 'legacy' ELSE category END WHERE event_type = '' OR outcome = '' OR category = '';
+CREATE INDEX IF NOT EXISTS idx_audit_events_type_time ON audit_events (event_type, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_events_resource_time ON audit_events (resource_type, resource_id, occurred_at DESC);

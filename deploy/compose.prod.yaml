@@ -1,0 +1,59 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    environment:
+      APP_CONFIG_FILE: /app/config.yaml
+      APP_ENV: ${APP_ENV:?APP_ENV is required}
+      APP_VERSION: ${APP_VERSION:-release}
+      LISTEN_ADDR: ${LISTEN_ADDR:-0.0.0.0:8080}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
+      IDENTITY_CLIENT_ID: ${IDENTITY_CLIENT_ID:?IDENTITY_CLIENT_ID is required}
+      IDENTITY_CLIENT_SECRET: ${IDENTITY_CLIENT_SECRET:?IDENTITY_CLIENT_SECRET is required}
+      IDENTITY_APPLICATION_CODE: ${IDENTITY_APPLICATION_CODE:?IDENTITY_APPLICATION_CODE is required}
+      IDENTITY_JWKS_URL: ${IDENTITY_JWKS_URL:?IDENTITY_JWKS_URL is required}
+      SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:?SESSION_ENCRYPTION_KEY is required}
+    volumes:
+      - ../config.yaml:/app/config.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose: ["8080"]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    expose: ["80"]
+    depends_on: [api]
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    env_file: ../.env
+    volumes:
+      - auth_template_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - auth_template_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  auth_template_postgres:
+  auth_template_redis:

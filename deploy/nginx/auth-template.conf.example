@@ -1,0 +1,26 @@
+server {
+    listen 80;
+    server_name ${PUBLIC_WEB_HOST};
+
+    location /v1/ {
+        proxy_pass http://api:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Request-ID $request_id;
+    }
+
+    location = /metrics {
+        proxy_pass http://api:8080/metrics;
+        proxy_set_header Host $host;
+        proxy_set_header X-Request-ID $request_id;
+    }
+
+    location /admin/ {
+        root /usr/share/nginx/html;
+        try_files $uri $uri/ /admin/index.html;
+    }
+
+    location / {
+        root /usr/share/nginx/html;
+        try_files $uri /index.html;
+    }
+}

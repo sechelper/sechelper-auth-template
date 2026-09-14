@@ -1,0 +1,505 @@
+openapi: 3.0.3
+info:
+  title: Unified Authentication Business Shell API
+  version: 0.1.0
+servers:
+  - url: /
+paths:
+  /healthz:
+    get:
+      responses:
+        '200':
+          description: Service is alive
+  /readyz:
+    get:
+      responses:
+        '200':
+          description: Service is ready
+  /v1/auth/login:
+    get:
+      summary: Start Confidential Client login
+      responses:
+        '302':
+          description: Redirect to the identity platform
+  /v1/auth/callback:
+    get:
+      summary: Handle the authorization code callback
+      parameters:
+        - in: query
+          name: code
+          required: true
+          schema: { type: string }
+        - in: query
+          name: state
+          required: true
+          schema: { type: string }
+      responses:
+        '302': { description: Redirect to the configured web origin }
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /v1/auth/session:
+    get:
+      summary: Read current business session
+      responses:
+        '200':
+          description: Session status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionResponse' }
+  /v1/auth/logout:
+    post:
+      summary: Revoke current business session
+      responses:
+        '204': { description: Session revoked }
+  /v1/auth/refresh:
+    post:
+      summary: Refresh the server-side Confidential Client session
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Session refreshed }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/authorization/me:
+    get:
+      summary: Read current Application authorization
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current authorization
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [subject, applicationCode, permissions]
+                    properties:
+                      subject: { type: string }
+                      applicationCode: { type: string }
+                      permissions:
+                        type: array
+                        items: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /v1/admin/access-decisions/check:
+    post:
+      summary: Explain a resource access decision
+      description: Evaluates the current administrator against a registered resource action. This endpoint is diagnostic only and does not return the resource or bypass the resource API.
+      security:
+        - sessionCookie: []
+      x-required-permission: admin:access
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resourceType, resourceId, action]
+              properties:
+                resourceType: { type: string, minLength: 1 }
+                resourceId: { type: string, minLength: 1 }
+                action: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Access decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessDecisionResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: Resource or action is invalid }
+  /v1/admin/resources:
+    get:
+      summary: List registered resource definitions
+      description: Lists resource types and actions declared by application modules. It does not list users, roles, or resource records.
+      security:
+        - sessionCookie: []
+      x-required-permission: admin:access
+      responses:
+        '200':
+          description: Registered resources
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ResourceDefinition'
+                  meta:
+                    type: object
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/admin/dashboard/overview:
+    get:
+      summary: Read platform dashboard overview
+      description: Returns application, current session, dependency health, and Manifest status. It intentionally does not include business metrics.
+      security:
+        - sessionCookie: []
+      x-required-permission: admin:access
+      responses:
+        '200':
+          description: Platform overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardOverviewResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/admin/account:
+    get:
+      summary: Read current administrator account context
+      security: [{ sessionCookie: [] }]
+      x-required-permission: auth:session
+      responses:
+        '200': { description: Current account context }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/admin/account/sessions:
+    get:
+      summary: List current administrator sessions
+      security: [{ sessionCookie: [] }]
+      x-required-permission: auth:session
+      responses:
+        '200': { description: Session collection }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/admin/account/sessions/{sessionId}:
+    delete:
+      summary: Revoke one session owned by the current administrator
+      security: [{ sessionCookie: [] }]
+      x-required-permission: auth:session:revoke
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Session revoked }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: Session not found }
+  /v1/admin/permissions:
+    get:
+      summary: List permissions registered by this Application
+      security: [{ sessionCookie: [] }]
+      x-required-permission: auth:manifest:read
+      responses:
+        '200': { description: Permission collection }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/admin/audit-events:
+    get:
+      summary: List platform audit events
+      security: [{ sessionCookie: [] }]
+      x-required-permission: audit:read
+      parameters:
+        - in: query
+          name: page[size]
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - in: query
+          name: filter[eventType]
+          schema: { type: string }
+        - in: query
+          name: filter[category]
+          schema: { type: string, enum: [authentication, authorization, resource, manifest, operations] }
+        - in: query
+          name: filter[severity]
+          schema: { type: string, enum: [info, warning, critical] }
+        - in: query
+          name: filter[outcome]
+          schema: { type: string, enum: [success, failure, denied] }
+        - in: query
+          name: filter[actorSubject]
+          schema: { type: string }
+        - in: query
+          name: filter[resourceType]
+          schema: { type: string }
+        - in: query
+          name: filter[resourceId]
+          schema: { type: string }
+        - in: query
+          name: filter[from]
+          schema: { type: string, format: date-time }
+        - in: query
+          name: filter[to]
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Key audit event collection
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditEvent' }
+                  meta:
+                    type: object
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/admin/operations/overview:
+    get:
+      summary: Read operations overview and runtime metrics
+      security: [{ sessionCookie: [] }]
+      x-required-permission: admin:access
+      responses:
+        '200': { description: Operations overview }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/internal/authorization-manifest:
+    get:
+      summary: Read Manifest synchronization state
+      security:
+        - sessionCookie: []
+      x-required-permission: auth:manifest:read
+      responses:
+        '200':
+          description: Manifest state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManifestStateResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/internal/authorization-manifest/sync:
+    post:
+      summary: Synchronize the local Manifest to the identity platform
+      security:
+        - sessionCookie: []
+      x-required-permission: auth:manifest:sync
+      responses:
+        '200':
+          description: Manifest synchronization state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManifestStateResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '502': { description: Identity platform rejected or could not complete synchronization }
+  /v1/orders:
+    get:
+      summary: List orders
+      security:
+        - sessionCookie: []
+      x-required-permission: order:read
+      parameters:
+        - in: query
+          name: page[size]
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Order list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Order' }
+                  meta:
+                    type: object
+                    properties:
+                      hasMore: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/orders/{orderId}:
+    get:
+      summary: Get an order
+      security:
+        - sessionCookie: []
+      x-required-permission: order:read
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Order' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: Order not found }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: auth_template_session
+  responses:
+    Unauthorized:
+      description: Missing or expired session
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: Authenticated caller lacks the required permission
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+  schemas:
+    Order:
+      type: object
+      required: [id, status, totalMinor, currency, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        status: { type: string }
+        totalMinor: { type: integer, format: int64 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SessionResponse:
+      type: object
+      required: [authenticated]
+      properties:
+        authenticated: { type: boolean }
+        subject: { type: string }
+        applicationCode: { type: string }
+        expiresAt: { type: string, format: date-time }
+    ManifestStateResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [applicationCode, manifestVersion, status, serverRevision]
+          properties:
+            applicationCode: { type: string }
+            manifestVersion: { type: integer, format: int64 }
+            contentHash: { type: string }
+            canonicalJson: { type: string }
+            syncId: { type: string }
+            status: { type: string }
+            serverRevision: { type: integer, format: int64 }
+            acceptedAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    DashboardOverviewResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [application, currentSession, dependencies, manifest]
+          properties:
+            application:
+              type: object
+              required: [name, version, environment, startedAt]
+              properties:
+                name: { type: string }
+                version: { type: string }
+                environment: { type: string, enum: [development, test, production] }
+                startedAt: { type: string, format: date-time }
+            currentSession:
+              type: object
+              required: [subject, applicationCode, permissionCount]
+              properties:
+                subject: { type: string }
+                applicationCode: { type: string }
+                permissionCount: { type: integer, minimum: 0 }
+            dependencies:
+              type: object
+              additionalProperties:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [healthy, degraded, unavailable, not_configured, not_synced] }
+                  latencyMs: { type: integer, minimum: 0 }
+                  message: { type: string }
+            manifest:
+              type: object
+              required: [status]
+              properties:
+                applicationCode: { type: string }
+                version: { type: integer, format: int64 }
+                status: { type: string }
+                contentHash: { type: string }
+                serverRevision: { type: integer, format: int64 }
+                updatedAt: { type: string, format: date-time }
+    AccessDecisionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [allowed, reasonCode, resourceType, resourceId, action]
+          properties:
+            allowed: { type: boolean }
+            reasonCode: { type: string }
+            permission: { type: string }
+            resourceType: { type: string }
+            resourceId: { type: string }
+            action: { type: string }
+    ResourceDefinition:
+      type: object
+      required: [type, actions]
+      properties:
+        type: { type: string }
+        name: { type: string }
+        description: { type: string }
+        actions:
+          type: array
+          items:
+            type: object
+            required: [name, permission]
+            properties:
+              name: { type: string }
+              permission: { type: string }
+    AuditEvent:
+      type: object
+      required: [id, occurredAt, eventType, category, severity, outcome, actorSubject, applicationCode, source]
+      properties:
+        id: { type: string }
+        occurredAt: { type: string, format: date-time }
+        eventType: { type: string }
+        category: { type: string }
+        severity: { type: string, enum: [info, warning, critical] }
+        outcome: { type: string, enum: [success, failure, denied] }
+        reasonCode: { type: string }
+        actorSubject: { type: string }
+        actorEmail: { type: string }
+        applicationCode: { type: string }
+        resourceType: { type: string }
+        resourceId: { type: string }
+        action: { type: string }
+        requestId: { type: string }
+        correlationId: { type: string }
+        source: { type: string }
+        metadata: { type: object, additionalProperties: true }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            requestId: { type: string }

@@ -1,0 +1,348 @@
+package main
+
+import (
+	"context"
+	"crypto/rand"
+	"database/sql"
+	"encoding/hex"
+	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"go.uber.org/zap"
+	"sechelper-auth-template/api/internal/modules/account"
+	"sechelper-auth-template/api/internal/modules/audit"
+	auditapplication "sechelper-auth-template/api/internal/modules/audit/application"
+	auditdomain "sechelper-auth-template/api/internal/modules/audit/domain"
+	auditpersistence "sechelper-auth-template/api/internal/modules/audit/persistence"
+	"sechelper-auth-template/api/internal/modules/authentication/application"
+	authhttp "sechelper-auth-template/api/internal/modules/authentication/transport/http"
+	"sechelper-auth-template/api/internal/modules/authorization"
+	authorizationapplication "sechelper-auth-template/api/internal/modules/authorization/application"
+	authorizationdomain "sechelper-auth-template/api/internal/modules/authorization/domain"
+	authorizationpersistence "sechelper-auth-template/api/internal/modules/authorization/persistence"
+	"sechelper-auth-template/api/internal/modules/dashboard"
+	dashboardapplication "sechelper-auth-template/api/internal/modules/dashboard/application"
+	"sechelper-auth-template/api/internal/modules/manifest"
+	manifestapplication "sechelper-auth-template/api/internal/modules/manifest/application"
+	"sechelper-auth-template/api/internal/modules/manifest/domain"
+	manifestpersistence "sechelper-auth-template/api/internal/modules/manifest/persistence"
+	"sechelper-auth-template/api/internal/modules/operations"
+	operationsapplication "sechelper-auth-template/api/internal/modules/operations/application"
+	"sechelper-auth-template/api/internal/modules/orders"
+	"sechelper-auth-template/api/internal/platform/config"
+	"sechelper-auth-template/api/internal/platform/identity"
+	"sechelper-auth-template/api/internal/platform/logging"
+	appmetrics "sechelper-auth-template/api/internal/platform/metrics"
+	"sechelper-auth-template/api/internal/platform/ratelimit"
+	"sechelper-auth-template/api/internal/platform/session"
+)
+
+func main() {
+	startedAt := time.Now().UTC()
+	cfg, err := config.Load(os.Args[1:]...)
+	if err != nil {
+		panic(err)
+	}
+	logger, closeLogger, err := logging.New(cfg.Log, "auth-template", cfg.App.Environment, cfg.App.Version)
+	if err != nil {
+		panic(err)
+	}
+	defer closeLogger()
+	db, err := sql.Open("pgx", cfg.Database.URL())
+	if err != nil {
+		logger.Fatal("database.open.failed", zap.Error(err))
+	}
+	pingCtx, cancelPing := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := db.PingContext(pingCtx); err != nil {
+		cancelPing()
+		logger.Fatal("database.ping.failed", zap.Error(err))
+	}
+	cancelPing()
+	defer db.Close()
+	identityClient := identity.NewClient(cfg.Identity, &http.Client{Timeout: 15 * time.Second})
+	limiter, closeLimiter, err := newRateLimiter(cfg)
+	if err != nil {
+		logger.Fatal("rate_limiter.create.failed", zap.Error(err))
+	}
+	defer closeLimiter()
+	serviceMetrics := &appmetrics.Metrics{}
+	sessions := session.NewPostgresStore(db)
+	protector, err := session.NewTokenProtector(cfg.Session.EncryptionKey)
+	if err != nil {
+		logger.Fatal("session.protector.failed", zap.Error(err))
+	}
+	authService := application.NewService(identityClient, sessions, sessions, protector, cfg.Session.TTL, cfg.Identity.ApplicationCode)
+	authService.SetRemoteRevokeObserver(func(err error) {
+		serviceMetrics.RemoteRevokeTotal.Add(1)
+		if err != nil {
+			serviceMetrics.RemoteRevokeErrorsTotal.Add(1)
+			logger.Warn("identity.revoke.failed", zap.Error(err))
+		}
+	})
+	var authorizationCache authorizationapplication.Cache = authorizationapplication.NewMemoryCache()
+	var closeAuthorizationCache func()
+	if cfg.App.RedisURL != "" {
+		redisCache, cacheErr := authorizationpersistence.NewRedisCache(cfg.App.RedisURL)
+		if cacheErr != nil {
+			logger.Fatal("authorization_cache.create.failed", zap.Error(cacheErr))
+		}
+		redisPingCtx, cancelRedisPing := context.WithTimeout(context.Background(), 5*time.Second)
+		if cacheErr := redisCache.Ping(redisPingCtx); cacheErr != nil {
+			cancelRedisPing()
+			logger.Fatal("authorization_cache.ping.failed", zap.Error(cacheErr))
+		}
+		cancelRedisPing()
+		authorizationCache = redisCache
+		closeAuthorizationCache = func() { _ = redisCache.Close() }
+	} else {
+		closeAuthorizationCache = func() {}
+	}
+	defer closeAuthorizationCache()
+	authorizationModule := authorization.New(sessions, cfg.Session.CookieName, authorizationCache)
+	accountModule := account.New(sessions)
+	auditModule := audit.New(auditapplication.NewService(auditpersistence.NewRepository(db)))
+	authService.SetAuditRecorder(auditModule.Service)
+	accountModule.SetAuditRecorder(auditModule.Service)
+	authorizationModule.ResourceHandler.SetDecisionRecorder(func(ctx context.Context, actor authorizationdomain.Context, decision authorizationdomain.Decision, requestID string) {
+		result := "denied"
+		if decision.Allowed {
+			result = "success"
+		}
+		eventID, err := session.NewID()
+		if err != nil {
+			return
+		}
+		_ = auditModule.Service.Record(ctx, auditdomain.Event{ID: "evt-" + eventID, ActorSubject: actor.Subject, ApplicationCode: actor.ApplicationCode, EventType: "ACCESS_DECISION_CHECKED", Outcome: result, ResourceType: decision.ResourceType, ResourceID: decision.ResourceID, Action: decision.Action, RequestID: requestID, Source: "admin_ui", Metadata: map[string]any{"reasonCode": decision.ReasonCode, "permission": decision.Permission}})
+	})
+	ordersModule := orders.New(db)
+	manifestModule := manifest.New(cfg.Identity.ApplicationCode)
+	manifestRemote := manifestpersistence.NewIdentityRemote(identity.NewManifestClient(cfg.Identity, &http.Client{Timeout: 15 * time.Second}))
+	manifestState := manifestpersistence.NewPostgresStateStore(db)
+	manifestSync := manifestapplication.NewSyncService(manifestModule.Registry, manifestRemote, manifestState, cfg.Identity.ApplicationCode, authorizationModule.Service.InvalidateApplication)
+	manifestModule.AttachSync(manifestSync)
+	manifestModule.SetAuditRecorder(func(ctx context.Context, state manifestapplication.State, err error, requestID string) {
+		eventID, idErr := session.NewID()
+		if idErr != nil {
+			return
+		}
+		eventType, outcome := "MANIFEST_SYNC_SUCCEEDED", "success"
+		if err != nil {
+			eventType, outcome = "MANIFEST_SYNC_FAILED", "failure"
+		}
+		_ = auditModule.Service.Record(ctx, auditdomain.Event{ID: "evt-" + eventID, EventType: eventType, Outcome: outcome, ActorSubject: "", ApplicationCode: cfg.Identity.ApplicationCode, ResourceType: "authorization_manifest", ResourceID: cfg.Identity.ApplicationCode, Action: "sync", RequestID: requestID, Source: "admin_ui", Metadata: map[string]any{"manifestVersion": state.ManifestVersion, "serverRevision": state.ServerRevision}})
+	})
+	manifestSync.SetErrorHandler(func(err error) {
+		logger.Error("manifest.scheduled_sync.failed", zap.Error(err), zap.String("component", "manifest"), zap.String("operation", "scheduled_sync"))
+	})
+	dashboardManifestReader := func(ctx context.Context) (dashboardapplication.ManifestState, error) {
+		value, err := manifestSync.Current(ctx)
+		if err != nil {
+			return dashboardapplication.ManifestState{}, err
+		}
+		return dashboardapplication.ManifestState{ApplicationCode: value.ApplicationCode, Version: value.ManifestVersion, Status: value.Status, ContentHash: value.ContentHash, ServerRevision: value.ServerRevision, UpdatedAt: value.UpdatedAt}, nil
+	}
+	var cachePinger dashboardapplication.CachePinger
+	if checker, ok := authorizationCache.(interface{ Ping(context.Context) error }); ok {
+		cachePinger = checker.Ping
+	}
+	dashboardModule := dashboard.New(dashboardapplication.NewService(db, dashboardapplication.AppInfo{Name: cfg.App.Name, Version: cfg.App.Version, Environment: cfg.App.Environment, StartedAt: startedAt}, dashboardManifestReader, cachePinger))
+	operationsModule := operations.New(operationsapplication.NewService(db, operationsapplication.AppInfo{Name: cfg.App.Name, Version: cfg.App.Version, Environment: cfg.App.Environment, StartedAt: startedAt}, serviceMetrics))
+	if err := registerFrameworkPermissions(manifestModule); err != nil {
+		logger.Fatal("manifest registration failed", zap.Error(err))
+	}
+	if err := ordersModule.RegisterPermissions(manifestModule.Registry); err != nil {
+		logger.Fatal("orders permission registration failed", zap.Error(err))
+	}
+	if err := ordersModule.RegisterResources(authorizationModule); err != nil {
+		logger.Fatal("orders resource registration failed", zap.Error(err))
+	}
+	startupCtx, cancelStartup := context.WithTimeout(context.Background(), 15*time.Second)
+	manifestReady := false
+	if _, err := manifestSync.Sync(startupCtx); err != nil {
+		cancelStartup()
+		logger.Error("manifest.startup_sync.failed", zap.Error(err))
+	} else {
+		manifestReady = true
+		cancelStartup()
+	}
+	stopManifestSync := manifestSync.Start(context.Background(), cfg.Manifest.SyncInterval)
+	defer stopManifestSync()
+	router := buildRouter(cfg, logger, db, func() bool { return manifestReady }, limiter, serviceMetrics, authhttp.NewHandler(authService, cfg.Session, cfg.App.PublicWebOrigin), authorizationModule, manifestModule, ordersModule, dashboardModule, accountModule, auditModule, operationsModule)
+	server := &http.Server{Addr: cfg.App.ListenAddr, Handler: router, ReadTimeout: cfg.Server.ReadTimeout, WriteTimeout: cfg.Server.WriteTimeout, IdleTimeout: cfg.Server.IdleTimeout}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		logger.Info("server.started", zap.String("address", cfg.App.ListenAddr))
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("server.failed", zap.Error(err))
+		}
+	}()
+	<-ctx.Done()
+	shutdown, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
+	defer cancel()
+	_ = server.Shutdown(shutdown)
+	logger.Info("server.stopped")
+}
+
+func buildRouter(cfg config.Config, logger *zap.Logger, db *sql.DB, manifestReady func() bool, limiter ratelimit.Limiter, serviceMetrics *appmetrics.Metrics, authHandler *authhttp.Handler, authorizationModule *authorization.Module, manifestModule *manifest.Module, ordersModule *orders.Module, dashboardModule *dashboard.Module, accountModule *account.Module, auditModule *audit.Module, operationsModule *operations.Module) *gin.Engine {
+	if cfg.App.Environment == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+	r := gin.New()
+	r.Use(gin.Recovery(), requestID(), requestLogger(logger), cors(cfg.CORS.AllowedOrigins), rateLimitAuth(limiter, cfg.RateLimit, serviceMetrics))
+	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
+	r.GET("/metrics", gin.WrapH(serviceMetrics.Handler()))
+	r.GET("/readyz", func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+		defer cancel()
+		if err := db.PingContext(ctx); err != nil || !manifestReady() {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "not_ready"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ready"})
+	})
+	v1 := r.Group("/v1")
+	authHandler.Register(v1)
+	authorizationModule.RegisterRoutes(v1)
+	dashboardModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"))
+	accountModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("auth:session"), authorizationModule.Middleware.RequirePermission("auth:session:revoke"))
+	authorizationModule.RegisterResourceRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"))
+	auditModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("audit:read"))
+	operationsModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"))
+	manifestModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermissions("admin:access", "auth:manifest:read"), authorizationModule.Middleware.RequirePermissions("admin:access", "auth:manifest:sync"))
+	ordersModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermissions("admin:access", "order:read"))
+	return r
+}
+
+func newRateLimiter(cfg config.Config) (ratelimit.Limiter, func(), error) {
+	if cfg.App.RedisURL == "" {
+		return ratelimit.NewMemory(), func() {}, nil
+	}
+	value, err := ratelimit.NewRedis(cfg.App.RedisURL)
+	if err != nil {
+		return nil, nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	err = value.Ping(ctx)
+	cancel()
+	if err != nil {
+		_ = value.Close()
+		return nil, nil, err
+	}
+	return value, func() { _ = value.Close() }, nil
+}
+
+func rateLimitAuth(limiter ratelimit.Limiter, cfg config.RateLimitConfig, serviceMetrics *appmetrics.Metrics) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		limit := 0
+		switch c.Request.URL.Path {
+		case "/v1/auth/login":
+			limit = cfg.LoginPerMinute
+			serviceMetrics.AuthLoginTotal.Add(1)
+		case "/v1/auth/callback":
+			limit = cfg.CallbackPerMinute
+			serviceMetrics.AuthCallbackTotal.Add(1)
+		case "/v1/auth/refresh":
+			limit = cfg.RefreshPerMinute
+			serviceMetrics.AuthRefreshTotal.Add(1)
+		case "/v1/auth/logout":
+			serviceMetrics.AuthLogoutTotal.Add(1)
+		}
+		if limit == 0 {
+			c.Next()
+			return
+		}
+		clientIP := c.Request.RemoteAddr
+		if host, _, splitErr := net.SplitHostPort(c.Request.RemoteAddr); splitErr == nil {
+			clientIP = host
+		}
+		key := clientIP + ":" + c.Request.URL.Path
+		allowed, retryAfter, err := limiter.Allow(c.Request.Context(), key, limit, time.Minute)
+		if err != nil {
+			serviceMetrics.RateLimitErrorsTotal.Add(1)
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": gin.H{"code": "RATE_LIMIT_DEPENDENCY_FAILED", "message": "RATE_LIMIT_DEPENDENCY_FAILED", "requestId": c.GetHeader("X-Request-ID")}})
+			return
+		}
+		if !allowed {
+			serviceMetrics.RateLimitedTotal.Add(1)
+			seconds := int(retryAfter.Seconds())
+			if seconds < 1 {
+				seconds = 1
+			}
+			c.Header("Retry-After", fmt.Sprintf("%d", seconds))
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": gin.H{"code": "RATE_LIMITED", "message": "RATE_LIMITED", "requestId": c.GetHeader("X-Request-ID")}})
+			return
+		}
+		c.Next()
+	}
+}
+
+func registerFrameworkPermissions(m *manifest.Module) error {
+	if err := m.Register(domain.Permission{Code: "admin:access", Name: "进入管理端", Description: "访问本应用后台管理能力", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/authorization/me"}, {Method: "GET", Path: "/v1/admin/dashboard/overview"}, {Method: "GET", Path: "/v1/admin/resources"}, {Method: "POST", Path: "/v1/admin/access-decisions/check"}, {Method: "GET", Path: "/v1/admin/operations/overview"}}}); err != nil {
+		return err
+	}
+	if err := m.Register(domain.Permission{Code: "auth:session", Name: "查看认证会话", Description: "读取当前业务会话和管理端会话", RiskLevel: "normal", APIs: []domain.API{{Method: "GET", Path: "/v1/auth/session"}, {Method: "GET", Path: "/v1/admin/account"}, {Method: "GET", Path: "/v1/admin/account/sessions"}}}); err != nil {
+		return err
+	}
+	if err := m.Register(domain.Permission{Code: "auth:manifest:read", Name: "查看认证 Manifest", Description: "查看本 Application 的 Manifest 同步状态", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/internal/authorization-manifest"}}}); err != nil {
+		return err
+	}
+	if err := m.Register(domain.Permission{Code: "auth:session:revoke", Name: "撤销会话", Description: "撤销本 Application 的业务会话", RiskLevel: "critical", APIs: []domain.API{{Method: "DELETE", Path: "/v1/admin/account/sessions/{sessionId}"}}}); err != nil {
+		return err
+	}
+	if err := m.Register(domain.Permission{Code: "audit:read", Name: "查看操作审计", Description: "查看管理端操作审计记录", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/admin/audit-events"}}}); err != nil {
+		return err
+	}
+	return m.Register(domain.Permission{Code: "auth:manifest:sync", Name: "同步认证 Manifest", Description: "触发本 Application 的 Manifest 同步", RiskLevel: "critical", APIs: []domain.API{{Method: "POST", Path: "/v1/internal/authorization-manifest/sync"}}})
+}
+func requestID() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.GetHeader("X-Request-ID")
+		if id == "" {
+			raw := make([]byte, 12)
+			if _, err := rand.Read(raw); err != nil {
+				id = "req-unknown"
+			} else {
+				id = "req-" + hex.EncodeToString(raw)
+			}
+		}
+		c.Header("X-Request-ID", id)
+		c.Next()
+	}
+}
+func requestLogger(logger *zap.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		started := time.Now()
+		c.Next()
+		logger.Info("http.request", zap.String("method", c.Request.Method), zap.String("path", c.FullPath()), zap.Int("status", c.Writer.Status()), zap.Int64("durationMs", time.Since(started).Milliseconds()), zap.String("requestId", c.GetHeader("X-Request-ID")))
+	}
+}
+func cors(origins []string) gin.HandlerFunc {
+	allowed := map[string]struct{}{}
+	for _, origin := range origins {
+		allowed[origin] = struct{}{}
+	}
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if _, ok := allowed[origin]; ok {
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Access-Control-Allow-Credentials", "true")
+			c.Header("Access-Control-Expose-Headers", "X-CSRF-Token, X-Request-ID")
+			c.Header("Vary", "Origin")
+		}
+		c.Header("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token, X-Request-ID")
+		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+		c.Next()
+	}
+}

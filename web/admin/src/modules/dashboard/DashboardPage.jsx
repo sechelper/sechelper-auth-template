@@ -23,6 +23,12 @@ const formatUptime = (value) => {
   const rest = minutes % 60;
   return `${days ? `${days} 天 ` : ""}${hours ? `${hours} 小时 ` : ""}${rest} 分钟`;
 };
+const formatSampleTime = (value) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+};
 const boundedPercent = (value) => typeof value === "number" && Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : null;
 const formatPercent = (value) => {
   const percent = boundedPercent(value);
@@ -39,6 +45,51 @@ const formatBytes = (value) => {
   }
   return `${amount.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
 };
+const resourceRefreshIntervalMs = 500;
+const resourceHistoryLimit = 60;
+const emptyResourceHistory = () => ({ sampledAt: null, cpu: [], memory: [], disk: [], goroutines: [] });
+const resourceSeries = [
+  ["cpu", "cpuPercent"],
+  ["memory", "memoryPercent"],
+  ["disk", "diskPercent"],
+  ["goroutines", "goroutines"],
+];
+
+function appendResourceSnapshot(history, snapshot) {
+  if (!snapshot?.sampledAt || snapshot.sampledAt === history.sampledAt) return history;
+  const next = { ...history, sampledAt: snapshot.sampledAt };
+  let appended = false;
+  for (const [series, field] of resourceSeries) {
+    const value = snapshot[field];
+    if (typeof value !== "number" || !Number.isFinite(value)) continue;
+    next[series] = [...history[series], { sampledAt: snapshot.sampledAt, value }].slice(-resourceHistoryLimit);
+    appended = true;
+  }
+  return appended ? next : history;
+}
+
+function ResourceTrend({ label, points, maximum = 100, color, fullWidth = false }) {
+  const width = 260;
+  const height = 42;
+  const inset = 4;
+  const plotWidth = width - inset * 2;
+  const values = points.map((point) => point.value);
+  const scale = maximum || Math.max(1, ...values);
+  const coordinates = points.map((point, index) => ({
+    x: points.length < 2 ? width - inset : inset + index / (points.length - 1) * plotWidth,
+    y: height - inset - Math.min(scale, Math.max(0, point.value)) / scale * (height - inset * 2),
+  }));
+  const polyline = coordinates.map((point) => `${point.x},${point.y}`).join(" ");
+  const last = coordinates.at(-1);
+  const current = points.at(-1)?.value;
+  const currentLabel = current === undefined ? "数据采集中" : maximum ? formatPercent(current) : current.toLocaleString("zh-CN");
+  return <svg className="platform-resource-trend" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${label}近 30 秒趋势，当前${currentLabel}`} style={{ display: "block", width: "100%", height: "2.35rem", minWidth: 0, overflow: "visible", ...(fullWidth ? { gridColumn: "1 / -1" } : {}) }}>
+    <title>{label}趋势 · {currentLabel}</title>
+    <line x1={inset} y1={height - inset} x2={width - inset} y2={height - inset} stroke="var(--sneat-border)" strokeDasharray="3 5" strokeWidth="1" />
+    {coordinates.length > 0 && <polyline points={polyline} fill="none" stroke={color} strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />}
+    {last && <><circle cx={last.x} cy={last.y} r="5.5" fill={color} opacity=".18" /><circle cx={last.x} cy={last.y} r="2.8" fill={color} /></>}
+  </svg>;
+}
 
 function HealthCard({ name, value }) {
   const detail = value.message || (value.latencyMs !== undefined ? `响应 ${value.latencyMs} ms` : "当前进程可用");
@@ -65,7 +116,7 @@ const gaugeTicks = [
   { label: "100%", x1: 309, y1: 168, x2: 318, y2: 168, tx: 336, ty: 173 },
 ];
 
-function ResourceGauge({ label, percent, detail }) {
+function ResourceGauge({ label, percent, detail, trend, color }) {
   const value = boundedPercent(percent);
   const firstSegment = value === null ? 0 : Math.min(value, 50);
   const secondSegment = value === null ? 0 : Math.max(value - 50, 0);
@@ -75,8 +126,8 @@ function ResourceGauge({ label, percent, detail }) {
     <p>{detail || "Linux 主机资源"}</p>
     <svg className="platform-resource-gauge__dial" role="img" aria-label={value === null ? `${label}暂无数据` : `${label}${displayedValue}`} viewBox="0 0 360 210">
       <path className="platform-gauge-track" d="M 60 168 A 120 120 0 0 1 300 168" />
-      <path className="platform-gauge-low" pathLength="100" strokeDasharray={`${firstSegment} ${100 - firstSegment}`} d="M 60 168 A 120 120 0 0 1 300 168" />
-      <path className="platform-gauge-high" pathLength="100" strokeDasharray={`${secondSegment} ${100 - secondSegment}`} strokeDashoffset="-50" d="M 60 168 A 120 120 0 0 1 300 168" />
+      <path className="platform-gauge-low" pathLength="100" strokeDasharray={`${firstSegment} ${100 - firstSegment}`} d="M 60 168 A 120 120 0 0 1 300 168" style={{ transition: "stroke-dasharray 450ms ease" }} />
+      <path className="platform-gauge-high" pathLength="100" strokeDasharray={`${secondSegment} ${100 - secondSegment}`} strokeDashoffset="-50" d="M 60 168 A 120 120 0 0 1 300 168" style={{ transition: "stroke-dasharray 450ms ease" }} />
       {gaugeTicks.map((tick) => <g key={tick.label}>
         <line className="platform-gauge-tick" x1={tick.x1} y1={tick.y1} x2={tick.x2} y2={tick.y2} />
         <text className="platform-gauge-label" x={tick.tx} y={tick.ty}>{tick.label}</text>
@@ -84,11 +135,15 @@ function ResourceGauge({ label, percent, detail }) {
       <text className="platform-gauge-value" x="180" y="163">{displayedValue}</text>
       <text className="platform-gauge-note" x="180" y="181">{value === null ? "数据暂不可用" : "实时使用率"}</text>
     </svg>
+    <ResourceTrend label={label} points={trend} color={color} />
   </article>;
 }
 
 export function DashboardPage() {
   const [data, setData] = useState(null);
+  const [resourceData, setResourceData] = useState(null);
+  const [resourceHistory, setResourceHistory] = useState(emptyResourceHistory);
+  const [resourceError, setResourceError] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [checkedAt, setCheckedAt] = useState(null);
@@ -102,6 +157,10 @@ export function DashboardPage() {
     try {
       const value = await dashboardApi.overview();
       setData(value.data);
+      if (value.data.resources) {
+        setResourceData(value.data.resources);
+        setResourceHistory((current) => appendResourceSnapshot(current, value.data.resources));
+      }
     } catch (value) {
       setError(value);
     } finally {
@@ -110,6 +169,32 @@ export function DashboardPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (!data) return undefined;
+    let active = true;
+    let timer;
+    const refreshResources = async () => {
+      const startedAt = Date.now();
+      try {
+        const value = await request("/v1/admin/dashboard/resources");
+        if (active) {
+          setResourceData(value.data);
+          setResourceHistory((current) => appendResourceSnapshot(current, value.data));
+          setResourceError(false);
+        }
+      } catch {
+        if (active) setResourceError(true);
+      } finally {
+        if (active) timer = window.setTimeout(refreshResources, Math.max(0, resourceRefreshIntervalMs - (Date.now() - startedAt)));
+      }
+    };
+    void refreshResources();
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [data]);
 
   const refresh = async () => {
     setBusy(true);
@@ -136,7 +221,7 @@ export function DashboardPage() {
 
   const app = data.application || {};
   const manifest = data.manifest || {};
-  const resources = data.resources || {};
+  const resources = resourceData || data.resources || {};
   const dependencies = dependencyOrder.map((name) => [name, data.dependencies?.[name] || { status: "unknown" }]);
   const unhealthy = dependencies.some(([, value]) => !["healthy", "not_configured"].includes(value.status));
   const healthyCount = dependencies.filter(([, value]) => value.status === "healthy").length;
@@ -173,20 +258,21 @@ export function DashboardPage() {
     <div className="platform-lower-grid">
       <section className="card platform-resource-card" aria-labelledby="platform-resource-title">
         <div className="platform-section-heading">
-          <div><span className="eyebrow">SERVER RESOURCES</span><h2 id="platform-resource-title">服务器资源</h2><p>{resources.sampledAt ? `最近采样 · ${formatDateTime(resources.sampledAt)}` : "等待首个资源快照"}</p></div>
+          <div><span className="eyebrow">SERVER RESOURCES</span><h2 id="platform-resource-title">服务器资源</h2><p>{resources.sampledAt ? `最近采样 · ${formatSampleTime(resources.sampledAt)} · 保留近 30 秒趋势` : "等待首个资源快照"}</p></div>
+          <span className={`status-pill ${resourceError ? "health-warning" : "health-ok"}`} role="status"><span className={`health-dot ${resourceError ? "health-warning" : "health-ok"}`} />{resourceError ? "正在重试" : "500ms 实时刷新"}</span>
         </div>
         <div className="platform-resource-gauges">
-          <ResourceGauge label="CPU 使用率" percent={resources.cpuPercent} />
-          <ResourceGauge label="内存占用" percent={resources.memoryPercent} detail={resources.memoryUsedBytes != null && resources.memoryTotalBytes != null ? `${formatBytes(resources.memoryUsedBytes)} / ${formatBytes(resources.memoryTotalBytes)}` : undefined} />
+          <ResourceGauge label="CPU 使用率" percent={resources.cpuPercent} trend={resourceHistory.cpu} color="var(--sneat-info)" />
+          <ResourceGauge label="内存占用" percent={resources.memoryPercent} trend={resourceHistory.memory} color="var(--sneat-primary)" detail={resources.memoryUsedBytes != null && resources.memoryTotalBytes != null ? `${formatBytes(resources.memoryUsedBytes)} / ${formatBytes(resources.memoryTotalBytes)}` : undefined} />
         </div>
         <div className="platform-resource-rows">
           <div className="platform-resource-row">
             <span className="platform-resource-icon">▤</span>
-            <div className="platform-resource-row-main"><span>磁盘使用率 · 项目所在盘</span><strong>{formatPercent(resources.diskPercent)}</strong><div className="platform-resource-track"><span style={{ width: `${boundedPercent(resources.diskPercent) ?? 0}%`, backgroundColor: "var(--sneat-primary)" }} /></div><small>{resources.diskUsedBytes != null && resources.diskTotalBytes != null ? `${formatBytes(resources.diskUsedBytes)} / ${formatBytes(resources.diskTotalBytes)}` : "磁盘数据暂不可用"}</small></div>
+            <div className="platform-resource-row-main"><span>磁盘使用率 · 项目所在盘</span><strong>{formatPercent(resources.diskPercent)}</strong><div className="platform-resource-track"><span style={{ width: `${boundedPercent(resources.diskPercent) ?? 0}%`, backgroundColor: "var(--sneat-primary)", transition: "width 450ms ease" }} /></div><ResourceTrend label="磁盘使用率" points={resourceHistory.disk} color="var(--sneat-primary)" fullWidth /><small>{resources.diskUsedBytes != null && resources.diskTotalBytes != null ? `${formatBytes(resources.diskUsedBytes)} / ${formatBytes(resources.diskTotalBytes)}` : "磁盘数据暂不可用"}</small></div>
           </div>
           <div className="platform-resource-row">
             <span className="platform-resource-icon green">Go</span>
-            <div className="platform-resource-row-main"><span>Goroutines · Go 进程</span><strong>{Number.isInteger(resources.goroutines) ? resources.goroutines.toLocaleString("zh-CN") : "—"}</strong><small>{resources.sampledAt ? "当前 Go 进程数量" : "等待资源采样"}</small></div>
+            <div className="platform-resource-row-main"><span>Goroutines · Go 进程</span><strong>{Number.isInteger(resources.goroutines) ? resources.goroutines.toLocaleString("zh-CN") : "—"}</strong><ResourceTrend label="Goroutines" points={resourceHistory.goroutines} maximum={null} color="var(--sneat-success)" fullWidth /><small>{resources.sampledAt ? "当前 Go 进程数量" : "等待资源采样"}</small></div>
           </div>
         </div>
       </section>

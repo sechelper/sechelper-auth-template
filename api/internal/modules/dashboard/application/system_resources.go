@@ -13,7 +13,8 @@ import (
 	"time"
 )
 
-const defaultResourceSampleInterval = 5 * time.Second
+// DefaultResourceSampleInterval is the server-side interval for host resource snapshots.
+const DefaultResourceSampleInterval = 500 * time.Millisecond
 
 type ResourceMetrics struct {
 	SampledAt        time.Time `json:"sampledAt"`
@@ -54,7 +55,7 @@ func NewSystemResourcesCollector(workDir string, interval time.Duration) *System
 		workDir = "."
 	}
 	if interval <= 0 {
-		interval = defaultResourceSampleInterval
+		interval = DefaultResourceSampleInterval
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	collector := &SystemResourcesCollector{

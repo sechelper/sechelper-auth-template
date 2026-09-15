@@ -161,7 +161,7 @@ func main() {
 	if checker, ok := authorizationCache.(interface{ Ping(context.Context) error }); ok {
 		cachePinger = checker.Ping
 	}
-	resourceCollector := dashboardapplication.NewSystemResourcesCollector(".", 5*time.Second)
+	resourceCollector := dashboardapplication.NewSystemResourcesCollector(".", dashboardapplication.DefaultResourceSampleInterval)
 	defer resourceCollector.Close()
 	dashboardModule := dashboard.New(dashboardapplication.NewService(db, dashboardapplication.AppInfo{Name: cfg.App.Name, Version: releaseVersion, Environment: cfg.App.Environment, BuildID: buildID, SourceRevision: buildRevision, StartedAt: startedAt}, dashboardManifestReader, cachePinger, resourceCollector))
 	operationsModule := operations.New(operationsapplication.NewService(db, operationsapplication.AppInfo{Name: cfg.App.Name, Version: releaseVersion, Environment: cfg.App.Environment, BuildID: buildID, SourceRevision: buildRevision, StartedAt: startedAt}, serviceMetrics))

@@ -68,14 +68,19 @@ func NewService(db *sql.DB, app AppInfo, manifestReader ManifestReader, cachePin
 
 func (s *Service) AppInfo() AppInfo { return s.app }
 
+func (s *Service) ResourceSnapshot() (ResourceMetrics, bool) {
+	if s.resources == nil {
+		return ResourceMetrics{}, false
+	}
+	return s.resources.Snapshot()
+}
+
 func (s *Service) Overview(ctx context.Context, current CurrentUser) Overview {
 	result := Overview{App: s.app, Current: current, Dependencies: map[string]DependencyStatus{
 		"api": {Status: "healthy"},
 	}}
-	if s.resources != nil {
-		if resources, ok := s.resources.Snapshot(); ok {
-			result.Resources = &resources
-		}
+	if resources, ok := s.ResourceSnapshot(); ok {
+		result.Resources = &resources
 	}
 	result.Dependencies["postgres"] = s.checkDatabase(ctx)
 	result.Dependencies["redis"] = s.checkCache(ctx)

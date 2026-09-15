@@ -46,6 +46,16 @@ func (h *Handler) Overview(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": overviewResponseData(value)})
 }
 
+func (h *Handler) Resources(c *gin.Context) {
+	value, ok := h.service.ResourceSnapshot()
+	if !ok {
+		httpkit.WriteError(c, http.StatusServiceUnavailable, httpkit.Error{Code: "RESOURCE_SNAPSHOT_UNAVAILABLE"})
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	httpkit.WriteData(c, http.StatusOK, value)
+}
+
 func overviewResponseData(value application.Overview) gin.H {
 	dependencies := make(map[string]dependencyResponse, len(value.Dependencies))
 	for name, dependency := range value.Dependencies {

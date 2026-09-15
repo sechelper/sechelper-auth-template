@@ -81,3 +81,33 @@ func TestResourceCollectorKeepsPartialSnapshotWhenMetricIsUnavailable(t *testing
 		t.Fatalf("available resource values missing: %+v", got)
 	}
 }
+
+func TestDefaultResourceSampleIntervalIsHalfSecond(t *testing.T) {
+	if DefaultResourceSampleInterval != 500*time.Millisecond {
+		t.Fatalf("default resource sample interval = %s, want 500ms", DefaultResourceSampleInterval)
+	}
+}
+
+type fixedSnapshotReader struct {
+	value ResourceMetrics
+	ready bool
+}
+
+func (r fixedSnapshotReader) Snapshot() (ResourceMetrics, bool) { return r.value, r.ready }
+
+func TestServiceReturnsLatestResourceSnapshot(t *testing.T) {
+	cpu := 12.5
+	value := ResourceMetrics{SampledAt: time.Date(2026, time.September, 24, 10, 10, 1, 0, time.UTC), CPUPercent: &cpu}
+	service := NewService(nil, AppInfo{}, nil, nil, fixedSnapshotReader{value: value, ready: true})
+	got, ok := service.ResourceSnapshot()
+	if !ok || !got.SampledAt.Equal(value.SampledAt) || got.CPUPercent == nil || *got.CPUPercent != cpu {
+		t.Fatalf("ResourceSnapshot = (%+v, %v), want latest sample", got, ok)
+	}
+}
+
+func TestServiceReportsResourceSnapshotUnavailableWithoutCollector(t *testing.T) {
+	service := NewService(nil, AppInfo{}, nil, nil)
+	if _, ok := service.ResourceSnapshot(); ok {
+		t.Fatal("ResourceSnapshot should be unavailable without a collector")
+	}
+}

@@ -193,6 +193,24 @@ paths:
                 $ref: '#/components/schemas/DashboardOverviewResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/admin/dashboard/resources:
+    get:
+      operationId: getDashboardResources
+      summary: Read the latest server resource sample
+      description: Returns only the latest server resource snapshot for high-frequency dashboard charts. It does not probe dependencies or query business data.
+      security:
+        - sessionCookie: []
+      x-required-permission: admin:access
+      responses:
+        '200':
+          description: Latest server resource sample
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerResourceSnapshotResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /v1/admin/account:
     get:
       operationId: getAdminAccount
@@ -393,6 +411,11 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ServiceUnavailable:
+      description: The latest resource snapshot is not available yet
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
   schemas:
     SessionResponse:
       type: object
@@ -466,6 +489,26 @@ components:
             serverRevision: { type: integer, format: int64 }
             acceptedAt: { type: string, format: date-time }
             updatedAt: { type: string, format: date-time }
+    ServerResourceSnapshotResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/ServerResourceSnapshot'
+    ServerResourceSnapshot:
+      type: object
+      description: A sampled Linux host and Go API resource snapshot. Metrics unavailable on the host are null.
+      required: [sampledAt, cpuPercent, memoryPercent, memoryUsedBytes, memoryTotalBytes, diskPercent, diskUsedBytes, diskTotalBytes, goroutines]
+      properties:
+        sampledAt: { type: string, format: date-time, description: UTC time when the resource snapshot was collected. }
+        cpuPercent: { type: number, format: float, minimum: 0, maximum: 100, nullable: true, description: Aggregate Linux host CPU utilization since the previous 500 ms sample; null until two valid samples exist or procfs is unavailable. }
+        memoryPercent: { type: number, format: float, minimum: 0, maximum: 100, nullable: true, description: "Linux host memory used as a percentage of total, using MemTotal minus MemAvailable." }
+        memoryUsedBytes: { type: integer, format: int64, minimum: 0, nullable: true, description: Linux host memory used in bytes. }
+        memoryTotalBytes: { type: integer, format: int64, minimum: 0, nullable: true, description: Linux host total memory in bytes. }
+        diskPercent: { type: number, format: float, minimum: 0, maximum: 100, nullable: true, description: Used space percentage on the filesystem containing the API working directory. The filesystem path is not returned. }
+        diskUsedBytes: { type: integer, format: int64, minimum: 0, nullable: true, description: Used bytes on the filesystem containing the API working directory. }
+        diskTotalBytes: { type: integer, format: int64, minimum: 0, nullable: true, description: Total bytes on the filesystem containing the API working directory. }
+        goroutines: { type: integer, minimum: 0, description: Current goroutine count in this Go API process. }
     DashboardOverviewResponse:
       type: object
       required: [data]
@@ -511,19 +554,7 @@ components:
                 serverRevision: { type: integer, format: int64 }
                 updatedAt: { type: string, format: date-time }
             resources:
-              type: object
-              description: Latest sampled server resources. Omitted until the first sampler snapshot is available; individual unavailable measurements are null.
-              required: [sampledAt, cpuPercent, memoryPercent, memoryUsedBytes, memoryTotalBytes, diskPercent, diskUsedBytes, diskTotalBytes, goroutines]
-              properties:
-                sampledAt: { type: string, format: date-time, description: UTC time when the resource snapshot was collected. }
-                cpuPercent: { type: number, format: float, minimum: 0, maximum: 100, nullable: true, description: Aggregate Linux host CPU utilization since the previous sample; null until two valid samples exist or procfs is unavailable. }
-                memoryPercent: { type: number, format: float, minimum: 0, maximum: 100, nullable: true, description: "Linux host memory used as a percentage of total, using MemTotal minus MemAvailable." }
-                memoryUsedBytes: { type: integer, format: int64, minimum: 0, nullable: true, description: Linux host memory used in bytes. }
-                memoryTotalBytes: { type: integer, format: int64, minimum: 0, nullable: true, description: Linux host total memory in bytes. }
-                diskPercent: { type: number, format: float, minimum: 0, maximum: 100, nullable: true, description: Used space percentage on the filesystem containing the API working directory. The filesystem path is not returned. }
-                diskUsedBytes: { type: integer, format: int64, minimum: 0, nullable: true, description: Used bytes on the filesystem containing the API working directory. }
-                diskTotalBytes: { type: integer, format: int64, minimum: 0, nullable: true, description: Total bytes on the filesystem containing the API working directory. }
-                goroutines: { type: integer, minimum: 0, description: Current goroutine count in this Go API process. }
+              $ref: '#/components/schemas/ServerResourceSnapshot'
     AccessDecisionResponse:
       type: object
       required: [data]

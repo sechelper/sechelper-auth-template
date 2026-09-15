@@ -4,8 +4,12 @@ ENV ?= development
 ENV_NORMALIZED := $(shell printf '%s' '$(ENV)' | tr '[:upper:]' '[:lower:]')
 ACTION ?= serve
 COMPONENT ?= all
+ifeq ($(origin CHECKED_OUT_REVISION),undefined)
 CHECKED_OUT_REVISION := $(shell git rev-parse HEAD 2>/dev/null || true)
-WORKTREE_CLEAN := $(shell git diff --quiet && git diff --cached --quiet && test -z "$$(git ls-files --others --exclude-standard)" && printf true || printf false)
+endif
+ifeq ($(origin WORKTREE_CLEAN),undefined)
+WORKTREE_CLEAN := $(shell if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git diff --quiet && git diff --cached --quiet && test -z "$$(git ls-files --others --exclude-standard)" && printf true || printf false; else printf false; fi)
+endif
 RELEASE_VERSION := $(shell sed -n 's/^releaseVersion:[[:space:]]*//p' release.yaml)
 RELEASE_BUILD_ID := $(shell sed -n 's/^releaseBuildId:[[:space:]]*//p' release.yaml)
 NPM_VERSION := $(shell sed -n 's/^npm:[[:space:]]*//p' toolchain.versions)

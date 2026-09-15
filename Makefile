@@ -13,10 +13,17 @@ ifeq ($(filter command line,$(origin BUILD_ID)),)
 override BUILD_ID := $(if $(filter development,$(ENV_NORMALIZED)),dev-local,$(RELEASE_BUILD_ID))
 endif
 SOURCE_REVISION := $(if $(filter true,$(WORKTREE_CLEAN)),$(CHECKED_OUT_REVISION),working-tree)
-ARTIFACT_MANIFEST ?= $(shell printf '%s' "$${TMPDIR:-/tmp}")/sechelper-auth-template-$(ENV_NORMALIZED)-artifacts.json
 COMPOSE_DEV := docker compose --project-name sechelper-auth-template-dev --env-file deploy/environments/development.env -f deploy/compose.dev.yaml
 COMPOSE_TEST := docker compose --project-name sechelper-auth-template-test --env-file .env --env-file deploy/environments/test.env -f deploy/compose.prod.yaml
 COMPOSE_PRODUCTION := docker compose --project-name sechelper-auth-template --env-file .env --env-file deploy/environments/production.env -f deploy/compose.prod.yaml
+ifeq ($(ENV_NORMALIZED),test)
+ifeq ($(origin BUILD_OUTPUT_DIR),undefined)
+BUILD_OUTPUT_DIR := $(shell mktemp -d "$${TMPDIR:-/tmp}/sechelper-auth-template-test-build.XXXXXX")
+endif
+ARTIFACT_MANIFEST ?= $(BUILD_OUTPUT_DIR)/artifact-manifest.json
+else
+ARTIFACT_MANIFEST ?= $(shell printf '%s' "$${TMPDIR:-/tmp}")/sechelper-auth-template-$(ENV_NORMALIZED)-artifacts.json
+endif
 
 help:
 	@printf '%s\n' \
@@ -85,20 +92,41 @@ build: release-check toolchain-check
 	@case "$(COMPONENT)" in all|api|web) ;; *) echo 'COMPONENT must be all, api, or web' >&2; exit 2 ;; esac
 	@if [ "$(ENV_NORMALIZED)" != development ] && [ "$(BUILD_ID)" != "$(RELEASE_BUILD_ID)" ]; then echo 'test/production BUILD_ID must match release.yaml releaseBuildId' >&2; exit 2; fi
 	@if [ "$(ENV_NORMALIZED)" != development ] && { [ "$(WORKTREE_CLEAN)" != true ] || ! printf '%s' "$(SOURCE_REVISION)" | grep -Eq '^[0-9a-f]{40}$$' || [ "$(SOURCE_REVISION)" != "$(CHECKED_OUT_REVISION)" ]; }; then echo 'test/production builds require a clean committed source revision' >&2; exit 2; fi
-	@if [ "$(COMPONENT)" = all ] || [ "$(COMPONENT)" = api ]; then docker build --build-arg CANONICAL_BUILD=1 --build-arg BUILD_ENV=$(ENV_NORMALIZED) --build-arg RELEASE_VERSION="$(RELEASE_VERSION)" --build-arg BUILD_ID="$(BUILD_ID)" --build-arg SOURCE_REVISION="$(SOURCE_REVISION)" -f deploy/Dockerfile.api -t sechelper-auth-template-api:$(RELEASE_VERSION)-$(BUILD_ID)-$(ENV_NORMALIZED) -t sechelper-auth-template-api:$(ENV_NORMALIZED) .; fi
-	@if [ "$(COMPONENT)" = all ] || [ "$(COMPONENT)" = web ]; then docker build --build-arg CANONICAL_BUILD=1 --build-arg BUILD_ENV=$(ENV_NORMALIZED) --build-arg NPM_VERSION="$(NPM_VERSION)" --build-arg RELEASE_VERSION="$(RELEASE_VERSION)" --build-arg BUILD_ID="$(BUILD_ID)" --build-arg SOURCE_REVISION="$(SOURCE_REVISION)" -f deploy/Dockerfile.web -t sechelper-auth-template-web:$(RELEASE_VERSION)-$(BUILD_ID)-$(ENV_NORMALIZED) -t sechelper-auth-template-web:$(ENV_NORMALIZED) .; fi
-	@if [ "$(COMPONENT)" = all ] && [ "$(ENV_NORMALIZED)" = development ]; then docker build --build-arg CANONICAL_BUILD=1 --build-arg BUILD_ENV=development -f deploy/Dockerfile.mock-idp -t sechelper-auth-template-mock-idp:development .; fi
-	@if [ "$(COMPONENT)" = all ] && [ "$(ENV_NORMALIZED)" = production ]; then \
-		web_id=$$(docker create sechelper-auth-template-web:production); \
-		api_id=$$(docker create sechelper-auth-template-api:production); \
-		tmp_dir=$$(mktemp -d /tmp/auth-template-prod-check.XXXXXX); \
-		trap 'docker rm -f "$$web_id" "$$api_id" >/dev/null 2>&1 || true; rm -rf "$$tmp_dir"' EXIT; \
-		docker cp "$$web_id:/usr/share/nginx/html/admin" "$$tmp_dir/admin"; \
-		docker cp "$$api_id:/app/migrations" "$$tmp_dir/migrations"; \
-		if grep -R -E -q '/admin/(component-reference|orders)' "$$tmp_dir/admin"; then echo 'test/example route leaked into production image' >&2; exit 1; fi; \
-		if find "$$tmp_dir/migrations/business" -name MODULE_KIND -type f -exec grep -l -x example {} + | grep -q .; then echo 'example migrations leaked into production image' >&2; exit 1; fi; \
+	@if [ "$(ENV_NORMALIZED)" = test ]; then \
+	  build_dir="$(BUILD_OUTPUT_DIR)"; mkdir -p "$$build_dir"; \
+	  if [ "$(COMPONENT)" = all ] || [ "$(COMPONENT)" = api ]; then \
+	    mkdir -p "$$build_dir/api" "$$build_dir/go-cache" "$$build_dir/go-tmp"; \
+	    (cd api && GOCACHE="$$build_dir/go-cache" GOTMPDIR="$$build_dir/go-tmp" CGO_ENABLED=0 go build -tags=example -trimpath -ldflags="-s -w -X main.releaseVersion=$(RELEASE_VERSION) -X main.buildID=$(BUILD_ID) -X main.buildRevision=$(SOURCE_REVISION) -X main.buildEnvironment=test" -o "$$build_dir/api/auth-template" ./cmd/server); \
+	    (cd api && GOCACHE="$$build_dir/go-cache" GOTMPDIR="$$build_dir/go-tmp" CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.buildEnvironment=test" -o "$$build_dir/api/auth-template-migrate" ./cmd/migrate); \
+	    cp -a api/migrations "$$build_dir/api/"; \
+	  fi; \
+	  if [ "$(COMPONENT)" = all ] || [ "$(COMPONENT)" = web ]; then \
+	    mkdir -p "$$build_dir/web" "$$build_dir/admin"; \
+	    (cd web && NPM_CONFIG_CACHE="$$build_dir/npm-cache" npm ci --no-audit --no-fund && NPM_CONFIG_CACHE="$$build_dir/npm-cache" npm run build -- --mode test --outDir "$$build_dir/web" --emptyOutDir); \
+	    printf '{"component":"web","applicationVersion":"%s","buildId":"%s","sourceRevision":"%s","environment":"test"}\n' "$(RELEASE_VERSION)" "$(BUILD_ID)" "$(SOURCE_REVISION)" > "$$build_dir/web/build-info.json"; \
+	    (cd web/admin && NPM_CONFIG_CACHE="$$build_dir/npm-cache" npm ci --no-audit --no-fund && NPM_CONFIG_CACHE="$$build_dir/npm-cache" npm run build -- --mode test --outDir "$$build_dir/admin" --emptyOutDir); \
+	    printf '{"component":"admin","applicationVersion":"%s","buildId":"%s","sourceRevision":"%s","environment":"test"}\n' "$(RELEASE_VERSION)" "$(BUILD_ID)" "$(SOURCE_REVISION)" > "$$build_dir/admin/build-info.json"; \
+	    grep -R -F -q '/admin/component-reference' "$$build_dir/admin" || { echo 'test build is missing component reference route' >&2; exit 1; }; \
+	    grep -R -F -q '/admin/orders' "$$build_dir/admin" || { echo 'test build is missing example orders route' >&2; exit 1; }; \
+	  fi; \
+	  node deploy/scripts/write-artifact-manifest.mjs "$(ARTIFACT_MANIFEST)" test "$(COMPONENT)" "$(RELEASE_VERSION)" "$(BUILD_ID)" "$(SOURCE_REVISION)" "$$build_dir"; \
+	  printf 'test build artifacts: %s\n' "$$build_dir"; \
+	else \
+	  if [ "$(COMPONENT)" = all ] || [ "$(COMPONENT)" = api ]; then docker build --build-arg CANONICAL_BUILD=1 --build-arg BUILD_ENV=$(ENV_NORMALIZED) --build-arg RELEASE_VERSION="$(RELEASE_VERSION)" --build-arg BUILD_ID="$(BUILD_ID)" --build-arg SOURCE_REVISION="$(SOURCE_REVISION)" -f deploy/Dockerfile.api -t sechelper-auth-template-api:$(RELEASE_VERSION)-$(BUILD_ID)-$(ENV_NORMALIZED) -t sechelper-auth-template-api:$(ENV_NORMALIZED) .; fi; \
+	  if [ "$(COMPONENT)" = all ] || [ "$(COMPONENT)" = web ]; then docker build --build-arg CANONICAL_BUILD=1 --build-arg BUILD_ENV=$(ENV_NORMALIZED) --build-arg NPM_VERSION="$(NPM_VERSION)" --build-arg RELEASE_VERSION="$(RELEASE_VERSION)" --build-arg BUILD_ID="$(BUILD_ID)" --build-arg SOURCE_REVISION="$(SOURCE_REVISION)" -f deploy/Dockerfile.web -t sechelper-auth-template-web:$(RELEASE_VERSION)-$(BUILD_ID)-$(ENV_NORMALIZED) -t sechelper-auth-template-web:$(ENV_NORMALIZED) .; fi; \
+	  if [ "$(COMPONENT)" = all ] && [ "$(ENV_NORMALIZED)" = development ]; then docker build --build-arg CANONICAL_BUILD=1 --build-arg BUILD_ENV=development -f deploy/Dockerfile.mock-idp -t sechelper-auth-template-mock-idp:development .; fi; \
+	  if [ "$(ENV_NORMALIZED)" = production ] && [ "$(COMPONENT)" = all ]; then \
+	    web_id=$$(docker create sechelper-auth-template-web:production); \
+	    api_id=$$(docker create sechelper-auth-template-api:production); \
+	    tmp_dir=$$(mktemp -d /tmp/auth-template-prod-check.XXXXXX); \
+	    trap 'docker rm -f "$$web_id" "$$api_id" >/dev/null 2>&1 || true; rm -rf "$$tmp_dir"' EXIT; \
+	    docker cp "$$web_id:/usr/share/nginx/html/admin" "$$tmp_dir/admin"; \
+	    docker cp "$$api_id:/app/migrations" "$$tmp_dir/migrations"; \
+	    if grep -R -E -q '/admin/(component-reference|orders)' "$$tmp_dir/admin"; then echo 'test/example route leaked into production image' >&2; exit 1; fi; \
+	    if find "$$tmp_dir/migrations/business" -name MODULE_KIND -type f -exec grep -l -x example {} + | grep -q .; then echo 'test/example migrations leaked into production image' >&2; exit 1; fi; \
+	  fi; \
+	  node deploy/scripts/write-artifact-manifest.mjs "$(ARTIFACT_MANIFEST)" "$(ENV_NORMALIZED)" "$(COMPONENT)" "$(RELEASE_VERSION)" "$(BUILD_ID)" "$(SOURCE_REVISION)"; \
 	fi
-	@node deploy/scripts/write-artifact-manifest.mjs "$(ARTIFACT_MANIFEST)" "$(ENV_NORMALIZED)" "$(COMPONENT)" "$(RELEASE_VERSION)" "$(BUILD_ID)" "$(SOURCE_REVISION)"
 
 openapi-lint: toolchain-check
 	npm_cache=$$(mktemp -d /tmp/auth-template-npm.XXXXXX); trap 'rm -rf "$$npm_cache"' EXIT; NPM_CONFIG_CACHE="$$npm_cache" npx --yes @redocly/cli@1.34.0 lint docs/contracts/openapi.yaml docs/contracts/business/orders/openapi.yaml

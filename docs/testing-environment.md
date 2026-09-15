@@ -1,5 +1,12 @@
 # 远程测试环境
 
+## 全量测试部署预检（2026-09-16 01:21 Asia/Shanghai）
+
+- 源码快照：本地分支 `codex/full-reset-deploy-20260916`，提交 `48a881bc66d507b8a56c6e4af20a1c9994b530c0`；使用 `git archive` 打包并通过 `scp` 上传至远端临时目录，未复制 `.git/`、`.env`、`config.yaml`、依赖缓存或构建产物。
+- 验证：远端 Go 全量测试及 opt-in Orders 测试通过；Web 8 项、Admin 17 项测试通过；Web/Admin `test` 模式构建分别转换 39/55 个模块；`make architecture-check` 与 `make toolchain-check` 通过。Go/Node/npm 实际版本为 Go 1.26.8、Node.js 24.21.0、npm 11.19.1；npm 从 root 用户级 `/root/.local/bin/npm` 生效。缺失的 `rg` 14.1.0 安装在 `/root/.local/bin/rg`，来自 Ubuntu 24.04 配置的软件源；`/root/.profile` 已加入该目录，原文件备份为 `/root/.profile.codex-tools-backup-20260916`。
+- 故障恢复与备份：预检时专属 PostgreSQL 容器 `sechelper-auth-template-dev-postgres-1` 已退出，导致服务因数据库连接拒绝而自动重启。仅启动该项目容器后其 health 为 healthy，`order-test.service` 恢复 active。重置前备份位于 `/opt/sechelper-auth-template-reset-backup-20260915T172015Z/`：数据库自定义转储 `auth_template-before-reset.dump`（`pg_restore --list` 验证通过，SHA-256 `e3a04a1f930d54465c9bd2493aa8de7a27f60d7cb481613d56a1b2c85d17ddd8`）、部署前源码归档、API 二进制和完整 `web/dist`。运行配置及数据库卷未被删除或改写。
+- 当前状态：尚未清空远端源码或数据库，也未替换服务二进制/静态资源。当前 `Makefile` 的唯一 test 构建分支调用 Docker 镜像构建，而物理机 test 部署规范要求在远端主机工具链构建 API 与前端；需要先授权框架维护路径 `Makefile`、`docs/deployment.md`，以保持同一 `make build ENV=test` 入口和正确的 test 构建契约，再继续部署。
+
 ## 平台总览服务器资源 API 远程验证（2026-09-16 00:07 Asia/Shanghai）
 
 - 验证源：当前未提交工作树的后台 Dashboard/API 资源改动；在测试主机 `/tmp/sechelper-resource-api-check.8ehPva` 临时源码快照中验证，未替换 `/opt/sechelper-auth-template` 下的服务源码。

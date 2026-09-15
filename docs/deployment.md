@@ -30,9 +30,11 @@ OpenAPI 文件中的 `info.version` 表示 API 合同版本，独立于运行时
 
 唯一构建入口是 `make build ENV=<development|test|production> [COMPONENT=all|api|web]`，运行入口是 `make run ENV=<development|test|production>`。入口解析应用版本、Build ID 和源代码修订号一次，再将相同值传给 API、前台和后台构建。development 使用 `dev-local` Build ID；test/production 必须使用 `release.yaml` 中的 Build ID、干净的已提交源码和有效版本，不能用 Git SHA 或时间戳替代应用版本/Build ID。`release.yaml` 的 Build ID 必须随发布源码提交，test 与 production 构建同一发布时使用相同 ID。
 
-构建产物包括 API/迁移 Docker 镜像、含前台和后台静态资源的 Web 镜像，以及写入两个静态目录的 `build-info.json`。镜像标签使用 `<releaseVersion>-<releaseBuildId>-<environment>`，容器 OCI 标签记录应用版本、Build ID、源码修订号和环境；Go `/v1/version` 与后台运行信息也返回版本、Build ID 和源码修订号。构建成功后，入口在操作系统临时目录写入 artifact manifest，列出每个组件、镜像引用和共同构建元数据；CI 会上传 test/production 两份 manifest。部署使用的 `config.yaml`、密钥、日志和数据库状态仍由运行环境管理，不进入镜像构建上下文中的配置挂载。
+`make build ENV=test` 在测试物理机上使用已验证的主机 Go、Node.js 和 npm 工具链原生构建，不创建应用 builder 容器。API、迁移器、迁移文件和前后台静态产物输出到唯一 `/tmp/sechelper-auth-template-test-build.*` 目录；该目录包含 `artifact-manifest.json`，记录各组件实际产物路径以及共同版本、Build ID、源提交和环境。发布流程须将产物部署到测试运行路径后再删除这一临时构建目录。构建源快照不含 `.git/` 时，调用方必须传入并核验其已提交源 SHA：`WORKTREE_CLEAN=true CHECKED_OUT_REVISION=<完整 SHA> make build ENV=test`；同步快照必须由该 SHA 生成，不能把工作树内容标记为提交产物。`COMPONENT=api` 只生成 API、迁移器和迁移文件；`COMPONENT=web` 生成前后台静态产物。development 与 production 继续由 Dockerfile 构建镜像。
 
-构建和依赖安装的工作目录不写入仓库。Go 测试缓存、临时文件和 artifact manifest 放在操作系统临时目录；Docker 镜像本身由 Docker 管理。应用运行配置由 Compose 显式挂载的 `config.yaml` 路径选择，日志与运行状态遵循该配置和容器可写层约定。
+development/production 构建产物包括 API/迁移 Docker 镜像、含前台和后台静态资源的 Web 镜像，以及写入两个静态目录的 `build-info.json`。镜像标签使用 `<releaseVersion>-<releaseBuildId>-<environment>`，容器 OCI 标签记录应用版本、Build ID、源码修订号和环境；Go `/v1/version` 与后台运行信息也返回版本、Build ID 和源码修订号。test 构建产物为主机原生 API/迁移器二进制、迁移目录和前后台静态资源，不生成应用 Docker 镜像。artifact manifest 对 Docker 构建列出镜像引用，对 test 构建列出临时产物路径；CI 会上传 test/production manifests。部署使用的 `config.yaml`、密钥、日志和数据库状态仍由运行环境管理，不进入源码快照或构建产物。
+
+构建和依赖安装的工作目录不写入仓库。Go 测试缓存、test 构建临时文件、test 产物及 artifact manifest 放在操作系统临时目录；Docker 镜像本身由 Docker 管理。development/production 应用运行配置由 Compose 显式挂载的 `config.yaml` 路径选择；test 服务继续由测试主机现有 systemd 单元加载运行配置，日志与运行状态遵循该配置及其可写路径约定。
 
 数据库结构由独立迁移命令管理，API 进程不会在启动时执行 DDL。首次运行或发布新版本前执行：
 

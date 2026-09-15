@@ -21,5 +21,9 @@ func (h *Handler) Me(c *gin.Context) {
 		permissions = append(permissions, code)
 	}
 	sort.Strings(permissions)
-	c.JSON(http.StatusOK, gin.H{"data": gin.H{"subject": value.Subject, "applicationCode": value.ApplicationCode, "permissions": permissions}})
+	data := gin.H{"subject": value.Subject, "identitySubject": value.Subject, "applicationCode": value.ApplicationCode, "permissions": permissions}
+	if value.PlatformUserUUID != "" {
+		data["platformUserUuid"] = value.PlatformUserUUID
+	}
+	c.JSON(http.StatusOK, gin.H{"data": data})
 }

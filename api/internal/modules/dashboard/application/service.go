@@ -7,10 +7,12 @@ import (
 )
 
 type AppInfo struct {
-	Name        string
-	Version     string
-	Environment string
-	StartedAt   time.Time
+	Name           string
+	Version        string
+	Environment    string
+	BuildID        string
+	SourceRevision string
+	StartedAt      time.Time
 }
 
 type ManifestState struct {
@@ -39,26 +41,42 @@ type Overview struct {
 	Current      CurrentUser
 	Dependencies map[string]DependencyStatus
 	Manifest     ManifestState
+	Resources    *ResourceMetrics
 }
 
 type ManifestReader func(context.Context) (ManifestState, error)
 type CachePinger func(context.Context) error
+type ResourceSnapshotReader interface {
+	Snapshot() (ResourceMetrics, bool)
+}
 
 type Service struct {
 	db             *sql.DB
 	app            AppInfo
 	manifestReader ManifestReader
 	cachePinger    CachePinger
+	resources      ResourceSnapshotReader
 }
 
-func NewService(db *sql.DB, app AppInfo, manifestReader ManifestReader, cachePinger CachePinger) *Service {
-	return &Service{db: db, app: app, manifestReader: manifestReader, cachePinger: cachePinger}
+func NewService(db *sql.DB, app AppInfo, manifestReader ManifestReader, cachePinger CachePinger, resources ...ResourceSnapshotReader) *Service {
+	service := &Service{db: db, app: app, manifestReader: manifestReader, cachePinger: cachePinger}
+	if len(resources) > 0 {
+		service.resources = resources[0]
+	}
+	return service
 }
+
+func (s *Service) AppInfo() AppInfo { return s.app }
 
 func (s *Service) Overview(ctx context.Context, current CurrentUser) Overview {
 	result := Overview{App: s.app, Current: current, Dependencies: map[string]DependencyStatus{
 		"api": {Status: "healthy"},
 	}}
+	if s.resources != nil {
+		if resources, ok := s.resources.Snapshot(); ok {
+			result.Resources = &resources
+		}
+	}
 	result.Dependencies["postgres"] = s.checkDatabase(ctx)
 	result.Dependencies["redis"] = s.checkCache(ctx)
 	if s.manifestReader == nil {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sechelper-auth-template/api/internal/modules/audit/application"
 	"sechelper-auth-template/api/internal/modules/audit/domain"
+	"sechelper-auth-template/api/internal/platform/httpkit"
 	"strconv"
 	"time"
 )
@@ -41,5 +42,5 @@ func (h *Handler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": data, "meta": gin.H{"hasMore": len(data) == limit}})
 }
 func writeError(c *gin.Context, status int, code string) {
-	c.AbortWithStatusJSON(status, gin.H{"error": gin.H{"code": code, "message": code, "requestId": c.GetHeader("X-Request-ID")}})
+	httpkit.WriteError(c, status, httpkit.Error{Code: code})
 }

@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
 	"net"
 	"net/http"
@@ -19,9 +17,9 @@ import (
 	"sechelper-auth-template/api/internal/modules/account"
 	"sechelper-auth-template/api/internal/modules/audit"
 	auditapplication "sechelper-auth-template/api/internal/modules/audit/application"
-	auditdomain "sechelper-auth-template/api/internal/modules/audit/domain"
 	auditpersistence "sechelper-auth-template/api/internal/modules/audit/persistence"
 	"sechelper-auth-template/api/internal/modules/authentication/application"
+	authpersistence "sechelper-auth-template/api/internal/modules/authentication/persistence"
 	authhttp "sechelper-auth-template/api/internal/modules/authentication/transport/http"
 	"sechelper-auth-template/api/internal/modules/authorization"
 	authorizationapplication "sechelper-auth-template/api/internal/modules/authorization/application"
@@ -35,7 +33,9 @@ import (
 	manifestpersistence "sechelper-auth-template/api/internal/modules/manifest/persistence"
 	"sechelper-auth-template/api/internal/modules/operations"
 	operationsapplication "sechelper-auth-template/api/internal/modules/operations/application"
+	plataudit "sechelper-auth-template/api/internal/platform/audit"
 	"sechelper-auth-template/api/internal/platform/config"
+	"sechelper-auth-template/api/internal/platform/httpkit"
 	"sechelper-auth-template/api/internal/platform/identity"
 	"sechelper-auth-template/api/internal/platform/logging"
 	appmetrics "sechelper-auth-template/api/internal/platform/metrics"
@@ -44,16 +44,25 @@ import (
 	"sechelper-auth-template/api/internal/platform/session"
 )
 
+var releaseVersion = "dev"
+var buildID = "dev-local"
+var buildRevision = "working-tree"
+var buildEnvironment = "production"
+
 func main() {
 	startedAt := time.Now().UTC()
 	cfg, err := config.Load(os.Args[1:]...)
 	if err != nil {
 		panic(err)
 	}
-	logger, closeLogger, err := logging.New(cfg.Log, "auth-template", cfg.App.Environment, cfg.App.Version)
+	if cfg.App.Environment != buildEnvironment {
+		panic(fmt.Errorf("binary build environment %q does not match config environment %q", buildEnvironment, cfg.App.Environment))
+	}
+	logger, closeLogger, err := logging.New(cfg.Log, "auth-template", cfg.App.Environment, releaseVersion)
 	if err != nil {
 		panic(err)
 	}
+	logger = logger.With(zap.String("buildId", buildID), zap.String("sourceRevision", buildRevision))
 	defer closeLogger()
 	db, err := sql.Open("pgx", cfg.Database.URL())
 	if err != nil {
@@ -79,6 +88,7 @@ func main() {
 		logger.Fatal("session.protector.failed", zap.Error(err))
 	}
 	authService := application.NewService(identityClient, sessions, sessions, protector, cfg.Session.TTL, cfg.Identity.ApplicationCode)
+	authService.SetUserResolver(cfg.Identity.Issuer, authpersistence.NewPostgresUserResolver(db))
 	authService.SetRemoteRevokeObserver(func(err error) {
 		serviceMetrics.RemoteRevokeTotal.Add(1)
 		if err != nil {
@@ -119,7 +129,7 @@ func main() {
 		if err != nil {
 			return
 		}
-		_ = auditModule.Service.Record(ctx, auditdomain.Event{ID: "evt-" + eventID, ActorSubject: actor.Subject, ApplicationCode: actor.ApplicationCode, EventType: "ACCESS_DECISION_CHECKED", Outcome: result, ResourceType: decision.ResourceType, ResourceID: decision.ResourceID, Action: decision.Action, RequestID: requestID, Source: "admin_ui", Metadata: map[string]any{"reasonCode": decision.ReasonCode, "permission": decision.Permission}})
+		_ = auditModule.Service.Record(ctx, plataudit.Event{ID: "evt-" + eventID, ActorSubject: actor.Subject, ApplicationCode: actor.ApplicationCode, EventType: "ACCESS_DECISION_CHECKED", Outcome: result, ResourceType: decision.ResourceType, ResourceID: decision.ResourceID, Action: decision.Action, RequestID: requestID, Source: "admin_ui", Metadata: map[string]any{"reasonCode": decision.ReasonCode, "permission": decision.Permission}})
 	})
 	manifestModule := manifest.New(cfg.Identity.ApplicationCode)
 	manifestRemote := manifestpersistence.NewIdentityRemote(identity.NewManifestClient(cfg.Identity, &http.Client{Timeout: 15 * time.Second}))
@@ -135,7 +145,7 @@ func main() {
 		if err != nil {
 			eventType, outcome = "MANIFEST_SYNC_FAILED", "failure"
 		}
-		_ = auditModule.Service.Record(ctx, auditdomain.Event{ID: "evt-" + eventID, EventType: eventType, Outcome: outcome, ActorSubject: "", ApplicationCode: cfg.Identity.ApplicationCode, ResourceType: "authorization_manifest", ResourceID: cfg.Identity.ApplicationCode, Action: "sync", RequestID: requestID, Source: "admin_ui", Metadata: map[string]any{"manifestVersion": state.ManifestVersion, "serverRevision": state.ServerRevision}})
+		_ = auditModule.Service.Record(ctx, plataudit.Event{ID: "evt-" + eventID, EventType: eventType, Outcome: outcome, ActorSubject: "", ApplicationCode: cfg.Identity.ApplicationCode, ResourceType: "authorization_manifest", ResourceID: cfg.Identity.ApplicationCode, Action: "sync", RequestID: requestID, Source: "admin_ui", Metadata: map[string]any{"manifestVersion": state.ManifestVersion, "serverRevision": state.ServerRevision}})
 	})
 	manifestSync.SetErrorHandler(func(err error) {
 		logger.Error("manifest.scheduled_sync.failed", zap.Error(err), zap.String("component", "manifest"), zap.String("operation", "scheduled_sync"))
@@ -151,10 +161,25 @@ func main() {
 	if checker, ok := authorizationCache.(interface{ Ping(context.Context) error }); ok {
 		cachePinger = checker.Ping
 	}
-	dashboardModule := dashboard.New(dashboardapplication.NewService(db, dashboardapplication.AppInfo{Name: cfg.App.Name, Version: cfg.App.Version, Environment: cfg.App.Environment, StartedAt: startedAt}, dashboardManifestReader, cachePinger))
-	operationsModule := operations.New(operationsapplication.NewService(db, operationsapplication.AppInfo{Name: cfg.App.Name, Version: cfg.App.Version, Environment: cfg.App.Environment, StartedAt: startedAt}, serviceMetrics))
+	resourceCollector := dashboardapplication.NewSystemResourcesCollector(".", 5*time.Second)
+	defer resourceCollector.Close()
+	dashboardModule := dashboard.New(dashboardapplication.NewService(db, dashboardapplication.AppInfo{Name: cfg.App.Name, Version: releaseVersion, Environment: cfg.App.Environment, BuildID: buildID, SourceRevision: buildRevision, StartedAt: startedAt}, dashboardManifestReader, cachePinger, resourceCollector))
+	operationsModule := operations.New(operationsapplication.NewService(db, operationsapplication.AppInfo{Name: cfg.App.Name, Version: releaseVersion, Environment: cfg.App.Environment, BuildID: buildID, SourceRevision: buildRevision, StartedAt: startedAt}, serviceMetrics))
 	if err := registerFrameworkPermissions(manifestModule); err != nil {
 		logger.Fatal("manifest registration failed", zap.Error(err))
+	}
+	businessRuntime, err := newBusinessRuntime(db)
+	if err != nil {
+		logger.Fatal("business registration failed", zap.Error(err))
+	}
+	if err := businessRuntime.RegisterPermissions(manifestModule); err != nil {
+		logger.Fatal("business permission registration failed", zap.Error(err))
+	}
+	if err := businessRuntime.RegisterResources(authorizationModule); err != nil {
+		logger.Fatal("business resource registration failed", zap.Error(err))
+	}
+	if err := businessRuntime.RegisterAuditEvents(auditModule.Service); err != nil {
+		logger.Fatal("business audit event registration failed", zap.Error(err))
 	}
 	startupCtx, cancelStartup := context.WithTimeout(context.Background(), 15*time.Second)
 	manifestReady := false
@@ -167,7 +192,10 @@ func main() {
 	}
 	stopManifestSync := manifestSync.Start(context.Background(), cfg.Manifest.SyncInterval)
 	defer stopManifestSync()
-	router := buildRouter(cfg, logger, db, func() bool { return manifestReady }, limiter, serviceMetrics, authhttp.NewHandler(authService, cfg.Session, cfg.App.PublicWebOrigin), authorizationModule, manifestModule, dashboardModule, accountModule, auditModule, operationsModule)
+	router, err := buildRouter(cfg, logger, db, func() bool { return manifestReady }, limiter, serviceMetrics, authhttp.NewHandler(authService, cfg.Session, cfg.App.PublicWebOrigin), authorizationModule, manifestModule, dashboardModule, accountModule, auditModule, operationsModule, businessRuntime)
+	if err != nil {
+		logger.Fatal("http routes registration failed", zap.Error(err))
+	}
 	server := &http.Server{Addr: cfg.App.ListenAddr, Handler: router, ReadTimeout: cfg.Server.ReadTimeout, WriteTimeout: cfg.Server.WriteTimeout, IdleTimeout: cfg.Server.IdleTimeout}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -184,12 +212,12 @@ func main() {
 	logger.Info("server.stopped")
 }
 
-func buildRouter(cfg config.Config, logger *zap.Logger, db *sql.DB, manifestReady func() bool, limiter ratelimit.Limiter, serviceMetrics *appmetrics.Metrics, authHandler *authhttp.Handler, authorizationModule *authorization.Module, manifestModule *manifest.Module, dashboardModule *dashboard.Module, accountModule *account.Module, auditModule *audit.Module, operationsModule *operations.Module) *gin.Engine {
+func buildRouter(cfg config.Config, logger *zap.Logger, db *sql.DB, manifestReady func() bool, limiter ratelimit.Limiter, serviceMetrics *appmetrics.Metrics, authHandler *authhttp.Handler, authorizationModule *authorization.Module, manifestModule *manifest.Module, dashboardModule *dashboard.Module, accountModule *account.Module, auditModule *audit.Module, operationsModule *operations.Module, businessRuntime *businessRuntime) (*gin.Engine, error) {
 	if cfg.App.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.New()
-	r.Use(gin.Recovery(), requestID(), platformsecurity.HostOriginPolicy(cfg), requestLogger(logger), cors(cfg.CORS.AllowedOrigins), rateLimitAuth(limiter, cfg.RateLimit, serviceMetrics))
+	r.Use(gin.Recovery(), httpkit.RequestIDMiddleware(), platformsecurity.HostOriginPolicy(cfg), requestLogger(logger), cors(cfg.CORS.AllowedOrigins), rateLimitAuth(limiter, cfg.RateLimit, serviceMetrics))
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
 	metrics := r.Group("/metrics")
 	if cfg.App.Environment == "production" {
@@ -214,7 +242,10 @@ func buildRouter(cfg config.Config, logger *zap.Logger, db *sql.DB, manifestRead
 	auditModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("audit:read"))
 	operationsModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"))
 	manifestModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermissions("admin:access", "auth:manifest:read"), authorizationModule.Middleware.RequirePermissions("admin:access", "auth:manifest:sync"))
-	return r
+	if err := businessRuntime.RegisterRoutes(v1, authorizationModule.Middleware); err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
 func newRateLimiter(cfg config.Config) (ratelimit.Limiter, func(), error) {
@@ -263,7 +294,7 @@ func rateLimitAuth(limiter ratelimit.Limiter, cfg config.RateLimitConfig, servic
 		allowed, retryAfter, err := limiter.Allow(c.Request.Context(), key, limit, time.Minute)
 		if err != nil {
 			serviceMetrics.RateLimitErrorsTotal.Add(1)
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": gin.H{"code": "RATE_LIMIT_DEPENDENCY_FAILED", "message": "RATE_LIMIT_DEPENDENCY_FAILED", "requestId": c.GetHeader("X-Request-ID")}})
+			httpkit.WriteError(c, http.StatusServiceUnavailable, httpkit.Error{Code: "RATE_LIMIT_DEPENDENCY_FAILED"})
 			return
 		}
 		if !allowed {
@@ -273,7 +304,7 @@ func rateLimitAuth(limiter ratelimit.Limiter, cfg config.RateLimitConfig, servic
 				seconds = 1
 			}
 			c.Header("Retry-After", fmt.Sprintf("%d", seconds))
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": gin.H{"code": "RATE_LIMITED", "message": "RATE_LIMITED", "requestId": c.GetHeader("X-Request-ID")}})
+			httpkit.WriteError(c, http.StatusTooManyRequests, httpkit.Error{Code: "RATE_LIMITED"})
 			return
 		}
 		c.Next()
@@ -298,26 +329,11 @@ func registerFrameworkPermissions(m *manifest.Module) error {
 	}
 	return m.Register(domain.Permission{Code: "auth:manifest:sync", Name: "同步认证 Manifest", Description: "触发本 Application 的 Manifest 同步", RiskLevel: "critical", APIs: []domain.API{{Method: "POST", Path: "/v1/internal/authorization-manifest/sync"}}})
 }
-func requestID() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		id := c.GetHeader("X-Request-ID")
-		if id == "" {
-			raw := make([]byte, 12)
-			if _, err := rand.Read(raw); err != nil {
-				id = "req-unknown"
-			} else {
-				id = "req-" + hex.EncodeToString(raw)
-			}
-		}
-		c.Header("X-Request-ID", id)
-		c.Next()
-	}
-}
 func requestLogger(logger *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		started := time.Now()
 		c.Next()
-		logger.Info("http.request", zap.String("method", c.Request.Method), zap.String("path", c.FullPath()), zap.Int("status", c.Writer.Status()), zap.Int64("durationMs", time.Since(started).Milliseconds()), zap.String("requestId", c.GetHeader("X-Request-ID")))
+		logger.Info("http.request", zap.String("method", c.Request.Method), zap.String("path", c.FullPath()), zap.Int("status", c.Writer.Status()), zap.Int64("durationMs", time.Since(started).Milliseconds()), zap.String("requestId", httpkit.RequestID(c)))
 	}
 }
 func cors(origins []string) gin.HandlerFunc {

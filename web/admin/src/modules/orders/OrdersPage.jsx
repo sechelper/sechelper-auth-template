@@ -1,5 +1,0 @@
-import { useEffect, useState } from "react";
-import { request } from "../auth/api.js";
-import { ErrorState, Loading, PageHeader } from "../../app/components.jsx";
-
-export function OrdersPage() { const [data, setData] = useState(null); const [error, setError] = useState(null); const load = () => request("/v1/orders").then((value) => setData(value.data || [])).catch(setError); useEffect(() => { load(); }, []); if (error) return <><PageHeader code="ORDERS" title="订单管理" description="查看当前应用可访问的订单数据。" /><ErrorState error={error} retry={() => { setError(null); load(); }} /></>; if (!data) return <Loading text="正在加载订单…" />; return <><PageHeader code="ORDERS" title="订单管理" description="查看当前应用可访问的订单数据。" /><section className="card table-wrap">{data.length === 0 ? <div className="empty"><strong>暂无订单</strong><span>当前没有可展示的订单记录。</span></div> : <table><thead><tr><th>订单编号</th><th>状态</th><th>金额</th><th>创建时间</th></tr></thead><tbody>{data.map((item) => <tr key={item.id}><td className="mono">{item.id}</td><td><span className="tag">{item.status}</span></td><td>{(item.totalMinor / 100).toFixed(2)} {item.currency}</td><td>{item.createdAt}</td></tr>)}</tbody></table>}</section></>; }

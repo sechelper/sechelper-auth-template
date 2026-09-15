@@ -20,13 +20,14 @@ var (
 )
 
 type Session struct {
-	ID, Subject, Email, ApplicationCode string
-	Permissions                         []string
-	RefreshTokenCiphertext              string
-	ExpiresAt                           time.Time
-	Version                             int64
-	Revoked                             bool
-	CreatedAt, UpdatedAt                time.Time
+	ID, Subject, PlatformUserUUID, Email, ApplicationCode string
+	Permissions                                           []string
+	ProfileClaims                                         map[string]any
+	RefreshTokenCiphertext                                string
+	ExpiresAt                                             time.Time
+	Version                                               int64
+	Revoked                                               bool
+	CreatedAt, UpdatedAt                                  time.Time
 }
 type LoginTransaction struct {
 	State, Nonce, Verifier string
@@ -64,11 +65,11 @@ func (s *PostgresStore) Create(ctx context.Context, value Session) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO authentication_sessions (id, subject, email, application_code, permissions, refresh_token_ciphertext, expires_at, version) VALUES ($1,$2,$3,$4,$5,$6,$7,1)`, value.ID, value.Subject, value.Email, value.ApplicationCode, permissions, value.RefreshTokenCiphertext, value.ExpiresAt)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO authentication_sessions (id, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, expires_at, version) VALUES ($1,$2,NULLIF($3,'')::uuid,$4,$5,$6,$7,$8,1)`, value.ID, value.Subject, value.PlatformUserUUID, value.Email, value.ApplicationCode, permissions, value.RefreshTokenCiphertext, value.ExpiresAt)
 	return err
 }
 func (s *PostgresStore) ListBySubject(ctx context.Context, subject string, limit int) ([]Session, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, subject, email, application_code, expires_at, created_at, updated_at, revoked_at FROM authentication_sessions WHERE subject=$1 AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL ORDER BY created_at DESC, id DESC LIMIT $2`, subject, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, subject, platform_user_uuid, email, application_code, expires_at, created_at, updated_at, revoked_at FROM authentication_sessions WHERE subject=$1 AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL ORDER BY created_at DESC, id DESC LIMIT $2`, subject, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -77,9 +78,11 @@ func (s *PostgresStore) ListBySubject(ctx context.Context, subject string, limit
 	for rows.Next() {
 		var value Session
 		var revokedAt sql.NullTime
-		if err := rows.Scan(&value.ID, &value.Subject, &value.Email, &value.ApplicationCode, &value.ExpiresAt, &value.CreatedAt, &value.UpdatedAt, &revokedAt); err != nil {
+		var platformUserUUID sql.NullString
+		if err := rows.Scan(&value.ID, &value.Subject, &platformUserUUID, &value.Email, &value.ApplicationCode, &value.ExpiresAt, &value.CreatedAt, &value.UpdatedAt, &revokedAt); err != nil {
 			return nil, err
 		}
+		value.PlatformUserUUID = platformUserUUID.String
 		value.Revoked = revokedAt.Valid
 		result = append(result, value)
 	}
@@ -90,7 +93,8 @@ func (s *PostgresStore) Get(ctx context.Context, id string) (Session, error) {
 	var permissions []byte
 	var refreshToken sql.NullString
 	var revokedAt sql.NullTime
-	err := s.db.QueryRowContext(ctx, `SELECT id, subject, email, application_code, permissions, refresh_token_ciphertext, expires_at, version, revoked_at FROM authentication_sessions WHERE id=$1 AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL`, id).Scan(&value.ID, &value.Subject, &value.Email, &value.ApplicationCode, &permissions, &refreshToken, &value.ExpiresAt, &value.Version, &revokedAt)
+	var platformUserUUID sql.NullString
+	err := s.db.QueryRowContext(ctx, `SELECT id, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, expires_at, version, revoked_at FROM authentication_sessions WHERE id=$1 AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL`, id).Scan(&value.ID, &value.Subject, &platformUserUUID, &value.Email, &value.ApplicationCode, &permissions, &refreshToken, &value.ExpiresAt, &value.Version, &revokedAt)
 	if err == sql.ErrNoRows {
 		return Session{}, ErrNotFound
 	}
@@ -101,6 +105,7 @@ func (s *PostgresStore) Get(ctx context.Context, id string) (Session, error) {
 		return Session{}, err
 	}
 	value.RefreshTokenCiphertext = refreshToken.String
+	value.PlatformUserUUID = platformUserUUID.String
 	value.Revoked = revokedAt.Valid
 	return value, nil
 }
@@ -125,7 +130,7 @@ func (s *PostgresStore) RotateRefreshToken(ctx context.Context, id string, rotat
 		return Session{}, err
 	}
 	defer tx.Rollback()
-	current, err := scanSession(tx.QueryRowContext(ctx, `SELECT id, subject, email, application_code, permissions, refresh_token_ciphertext, expires_at, version, revoked_at FROM authentication_sessions WHERE id=$1 FOR UPDATE`, id))
+	current, err := scanSession(tx.QueryRowContext(ctx, `SELECT id, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, expires_at, version, revoked_at FROM authentication_sessions WHERE id=$1 FOR UPDATE`, id))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Session{}, ErrNotFound
@@ -292,7 +297,8 @@ func scanSession(row sessionScanner) (Session, error) {
 	var permissions []byte
 	var refreshToken sql.NullString
 	var revokedAt sql.NullTime
-	err := row.Scan(&value.ID, &value.Subject, &value.Email, &value.ApplicationCode, &permissions, &refreshToken, &value.ExpiresAt, &value.Version, &revokedAt)
+	var platformUserUUID sql.NullString
+	err := row.Scan(&value.ID, &value.Subject, &platformUserUUID, &value.Email, &value.ApplicationCode, &permissions, &refreshToken, &value.ExpiresAt, &value.Version, &revokedAt)
 	if err != nil {
 		return Session{}, err
 	}
@@ -300,6 +306,7 @@ func scanSession(row sessionScanner) (Session, error) {
 		return Session{}, err
 	}
 	value.RefreshTokenCiphertext, value.Revoked = refreshToken.String, revokedAt.Valid
+	value.PlatformUserUUID = platformUserUUID.String
 	return value, nil
 }
 func (s *MemoryStore) Revoke(_ context.Context, id string) error {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"sechelper-auth-template/api/internal/platform/config"
+	"sechelper-auth-template/api/internal/platform/httpkit"
 )
 
 // HostOriginPolicy rejects requests whose externally visible host or origin is
@@ -18,11 +19,11 @@ func HostOriginPolicy(cfg config.Config) gin.HandlerFunc {
 	trusted := parseCIDRs(cfg.Security.TrustedProxyCIDRs)
 	return func(c *gin.Context) {
 		if !validHost(c.Request, allowedHosts, trusted) {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "HOST_POLICY_REJECTED", "message": "HOST_POLICY_REJECTED", "requestId": c.GetHeader("X-Request-ID")}})
+			httpkit.WriteError(c, http.StatusBadRequest, httpkit.Error{Code: "HOST_POLICY_REJECTED"})
 			return
 		}
 		if origin := c.GetHeader("Origin"); origin != "" && !allowedOrigin(origin, cfg.CORS.AllowedOrigins) {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"code": "ORIGIN_POLICY_REJECTED", "message": "ORIGIN_POLICY_REJECTED", "requestId": c.GetHeader("X-Request-ID")}})
+			httpkit.WriteError(c, http.StatusForbidden, httpkit.Error{Code: "ORIGIN_POLICY_REJECTED"})
 			return
 		}
 		c.Next()
@@ -32,7 +33,7 @@ func HostOriginPolicy(cfg config.Config) gin.HandlerFunc {
 func MetricsAuth(token string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if token == "" || c.GetHeader("Authorization") != "Bearer "+token {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": gin.H{"code": "METRICS_UNAUTHORIZED", "message": "METRICS_UNAUTHORIZED", "requestId": c.GetHeader("X-Request-ID")}})
+			httpkit.WriteError(c, http.StatusUnauthorized, httpkit.Error{Code: "METRICS_UNAUTHORIZED"})
 			return
 		}
 		c.Next()

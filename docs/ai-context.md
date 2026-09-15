@@ -9,7 +9,7 @@
 - 认证用例：`api/internal/modules/authentication/application/`
 - 认证 HTTP：`api/internal/modules/authentication/transport/http/`
 - Manifest：`api/internal/modules/manifest/`
-- React 认证壳：`web/src/modules/auth/`
+- React 前台框架：`web/src/framework/`，其中认证壳位于 `web/src/framework/auth/`
 - OpenAPI：`docs/contracts/openapi.yaml`
 
 ## 重要限制
@@ -18,4 +18,4 @@
 
 ## 默认视觉规范
 
-除非当前需求明确指定其他样式，`web/` 与 `web/admin/` 的新页面、新组件和受影响区域默认采用 [`docs/development-standards.md`](development-standards.md) 规定的 Sneat Bootstrap FREE 设计参考。实现前阅读 [`docs/ai-design-reference/sneat-bootstrap-free/`](ai-design-reference/sneat-bootstrap-free/)，优先复用其中的设计令牌、布局模式和组件状态；不得因此引入完整 Bootstrap/Sneat 运行时或把业务逻辑写入参考目录。
+`web/` 与 `web/admin/` 的新页面和改造区域遵守 [`docs/development-standards.md`](development-standards.md)，优先复用项目现有样式令牌、组件与布局约定。具体产品设计或当前需求另有明确要求时，以该要求为准；视觉实现不得改变认证、授权和 API 边界。

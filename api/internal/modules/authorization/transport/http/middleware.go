@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"sechelper-auth-template/api/internal/modules/authorization/application"
 	"sechelper-auth-template/api/internal/modules/authorization/domain"
+	"sechelper-auth-template/api/internal/platform/httpkit"
 )
 
 const contextKey = "authorization.context"
@@ -27,7 +28,7 @@ func (m *Middleware) RequirePermission(permission string) gin.HandlerFunc {
 			writeAuthorizationError(c, err)
 			return
 		}
-		c.Set(contextKey, value)
+		setCurrent(c, value)
 		c.Next()
 	}
 }
@@ -44,7 +45,7 @@ func (m *Middleware) RequirePermissions(permissions ...string) gin.HandlerFunc {
 			}
 			value = resolved
 		}
-		c.Set(contextKey, value)
+		setCurrent(c, value)
 		c.Next()
 	}
 }
@@ -56,10 +57,16 @@ func (m *Middleware) RequireAuthentication() gin.HandlerFunc {
 			writeAuthorizationError(c, err)
 			return
 		}
-		c.Set(contextKey, value)
+		setCurrent(c, value)
 		c.Next()
 	}
 }
+
+func setCurrent(c *gin.Context, value domain.Context) {
+	c.Set(contextKey, value)
+	c.Request = c.Request.WithContext(domain.WithContext(c.Request.Context(), value))
+}
+
 func Current(c *gin.Context) (domain.Context, bool) {
 	value, ok := c.Get(contextKey)
 	if !ok {
@@ -75,5 +82,5 @@ func writeAuthorizationError(c *gin.Context, err error) {
 	} else if errors.Is(err, application.ErrDependency) {
 		status, code = http.StatusBadGateway, "AUTHORIZATION_DEPENDENCY_FAILED"
 	}
-	c.AbortWithStatusJSON(status, gin.H{"error": gin.H{"code": code, "message": code, "requestId": c.GetHeader("X-Request-ID")}})
+	httpkit.WriteError(c, status, httpkit.Error{Code: code})
 }

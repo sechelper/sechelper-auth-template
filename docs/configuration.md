@@ -2,6 +2,8 @@
 
 应用配置由根目录 `config.yaml`（模板为 [`config.example.yaml`](../config.example.yaml)）定义，Go 服务通过独立的 Viper 实例在启动时读取一次、严格反序列化并完成语义校验。启动参数 `--config <path>` 优先级最高，其次是 `APP_CONFIG_FILE`；仅 development/test 允许回退到工作目录的 `config.yaml` 或 `config.yml`。production 必须显式指定且可读的配置文件。
 
+应用发布版本不属于运行配置：`app.version` 和 `APP_VERSION` 不再受支持。升级现存部署配置时应删除 `app.version`；严格解码会拒绝未知字段。版本由根目录 `release.yaml` 在规范构建过程中注入。
+
 `.env` 只属于 Docker Compose：用于 `${VAR}` 插值，并且只有 Compose 文件显式列出的变量才会传入容器。它不是 Viper 配置文件，不能被复制进镜像或源代码快照；实际文件由 Git 忽略。`config.yaml` 只放非敏感应用设置，密码、token、私钥和凭据通过显式环境变量或部署密钥服务注入。
 
 ## YAML 结构
@@ -14,7 +16,7 @@
 
 | YAML | 环境变量 |
 |---|---|
-| `app.environment` / `app.version` | `APP_ENV` / `APP_VERSION` |
+| `app.environment` | `APP_ENV` |
 | `app.listenAddr` | `LISTEN_ADDR` |
 | `app.publicWebOrigin` / `app.apiOrigin` | `PUBLIC_WEB_ORIGIN` / `API_ORIGIN` |
 | `server.port` / `server.*Timeout` | `SERVER_PORT` / `SERVER_READ_TIMEOUT` 等 |

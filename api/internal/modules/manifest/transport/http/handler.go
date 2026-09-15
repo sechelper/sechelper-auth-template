@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"sechelper-auth-template/api/internal/modules/manifest/application"
+	"sechelper-auth-template/api/internal/platform/httpkit"
 )
 
 type Handler struct {
@@ -77,7 +78,7 @@ func (h *Handler) Status(c *gin.Context) {
 func (h *Handler) Sync(c *gin.Context) {
 	value, err := h.service.Sync(c.Request.Context())
 	if h.auditRecorder != nil {
-		h.auditRecorder(c.Request.Context(), value, err, c.GetHeader("X-Request-ID"))
+		h.auditRecorder(c.Request.Context(), value, err, httpkit.RequestID(c))
 	}
 	if err != nil {
 		writeError(c, http.StatusBadGateway, "MANIFEST_SYNC_FAILED")
@@ -86,5 +87,5 @@ func (h *Handler) Sync(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": toStateResponse(value)})
 }
 func writeError(c *gin.Context, status int, code string) {
-	c.AbortWithStatusJSON(status, gin.H{"error": gin.H{"code": code, "message": code, "requestId": c.GetHeader("X-Request-ID")}})
+	httpkit.WriteError(c, status, httpkit.Error{Code: code})
 }

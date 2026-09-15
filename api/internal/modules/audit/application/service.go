@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"sechelper-auth-template/api/internal/modules/audit/domain"
+	platformaudit "sechelper-auth-template/api/internal/platform/audit"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,11 +21,9 @@ type Repository interface {
 	Record(context.Context, domain.Event) error
 	List(context.Context, ListFilter) ([]domain.Event, error)
 }
-type Recorder interface {
-	Record(context.Context, domain.Event) error
-}
-type EventDefinition struct{ Category, Severity string }
+type EventDefinition = platformaudit.EventDefinition
 type Service struct {
+	mu          sync.RWMutex
 	repository  Repository
 	definitions map[string]EventDefinition
 }
@@ -37,8 +37,39 @@ func NewService(repository Repository) *Service {
 		"RESOURCE_EXPORT_STARTED": {"resource", "warning"}, "RESOURCE_EXPORT_COMPLETED": {"resource", "warning"}, "RESOURCE_EXPORT_FAILED": {"resource", "critical"},
 	}}
 }
-func (s *Service) Record(ctx context.Context, event domain.Event) error {
+
+func (s *Service) RegisterEventType(eventType string, definition platformaudit.EventDefinition) error {
+	eventType = strings.TrimSpace(eventType)
+	definition.Category = strings.TrimSpace(definition.Category)
+	definition.Severity = strings.ToLower(strings.TrimSpace(definition.Severity))
+	if eventType == "" || !supportedCategory(definition.Category) || (definition.Severity != "info" && definition.Severity != "warning" && definition.Severity != "critical") {
+		return errors.New("audit event type, category, and supported severity are required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if current, exists := s.definitions[eventType]; exists {
+		if current == definition {
+			return nil
+		}
+		return fmt.Errorf("audit event type %q is already registered", eventType)
+	}
+	s.definitions[eventType] = definition
+	return nil
+}
+
+func supportedCategory(value string) bool {
+	switch value {
+	case "authentication", "authorization", "resource", "manifest", "operations", "business":
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Service) Record(ctx context.Context, event platformaudit.Event) error {
+	s.mu.RLock()
 	definition, ok := s.definitions[event.EventType]
+	s.mu.RUnlock()
 	if !ok {
 		return fmt.Errorf("audit event type %q is not registered", event.EventType)
 	}
@@ -60,7 +91,13 @@ func (s *Service) Record(ctx context.Context, event domain.Event) error {
 	if event.ID == "" {
 		return errors.New("audit event id is required")
 	}
-	return s.repository.Record(ctx, event)
+	return s.repository.Record(ctx, domain.Event{
+		ID: event.ID, OccurredAt: event.OccurredAt, EventType: event.EventType, Category: event.Category,
+		Severity: event.Severity, Outcome: event.Outcome, ReasonCode: event.ReasonCode, ActorSubject: event.ActorSubject,
+		ActorEmail: event.ActorEmail, ApplicationCode: event.ApplicationCode, ResourceType: event.ResourceType,
+		ResourceID: event.ResourceID, Action: event.Action, RequestID: event.RequestID, CorrelationID: event.CorrelationID,
+		Source: event.Source, Metadata: event.Metadata,
+	})
 }
 func (s *Service) List(ctx context.Context, filter ListFilter) ([]domain.Event, error) {
 	if filter.Limit < 1 {

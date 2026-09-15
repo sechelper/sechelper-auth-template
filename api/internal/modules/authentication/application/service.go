@@ -6,11 +6,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
-	auditapplication "sechelper-auth-template/api/internal/modules/audit/application"
-	auditdomain "sechelper-auth-template/api/internal/modules/audit/domain"
+	plataudit "sechelper-auth-template/api/internal/platform/audit"
 	"sechelper-auth-template/api/internal/platform/identity"
 	"sechelper-auth-template/api/internal/platform/session"
 )
@@ -34,6 +34,9 @@ type IdentityProvider interface {
 	RefreshToken(context.Context, string) (identity.TokenSet, error)
 	RevokeToken(context.Context, string) error
 }
+type UserResolver interface {
+	ResolveOrCreate(context.Context, string, string) (string, error)
+}
 type Service struct {
 	identity        IdentityProvider
 	sessions        session.Store
@@ -43,13 +46,25 @@ type Service struct {
 	onRemoteRevoke  func(error)
 	ttl             time.Duration
 	applicationCode string
-	auditRecorder   auditapplication.Recorder
+	identityIssuer  string
+	userResolver    UserResolver
+	auditRecorder   plataudit.Recorder
+	profileMu       sync.RWMutex
+	profiles        map[string]cachedProfile
 }
 
-func (s *Service) SetAuditRecorder(recorder auditapplication.Recorder) { s.auditRecorder = recorder }
+type cachedProfile struct {
+	claims    map[string]any
+	expiresAt time.Time
+}
+
+func (s *Service) SetAuditRecorder(recorder plataudit.Recorder) { s.auditRecorder = recorder }
+func (s *Service) SetUserResolver(issuer string, resolver UserResolver) {
+	s.identityIssuer, s.userResolver = issuer, resolver
+}
 
 func NewService(client IdentityProvider, sessions session.Store, loginStates session.LoginTransactionStore, protector *session.TokenProtector, ttl time.Duration, applicationCode string) *Service {
-	return &Service{identity: client, sessions: sessions, loginStates: loginStates, protector: protector, ttl: ttl, applicationCode: applicationCode}
+	return &Service{identity: client, sessions: sessions, loginStates: loginStates, protector: protector, ttl: ttl, applicationCode: applicationCode, profiles: make(map[string]cachedProfile)}
 }
 func (s *Service) BeginLogin(ctx context.Context) (string, error) {
 	state, err := randomString(32)
@@ -86,7 +101,7 @@ func (s *Service) CompleteLogin(ctx context.Context, state, code string) (result
 			eventType = "AUTH_LOGIN_FAILED"
 			outcome = "failure"
 		}
-		_ = s.auditRecorder.Record(ctx, auditdomain.Event{ID: "evt-" + id, EventType: eventType, Outcome: outcome, ActorSubject: result.Subject, ApplicationCode: s.applicationCode, ResourceType: "auth_flow", ResourceID: s.applicationCode, Action: "login", Source: "api"})
+		_ = s.auditRecorder.Record(ctx, plataudit.Event{ID: "evt-" + id, EventType: eventType, Outcome: outcome, ActorSubject: result.Subject, ApplicationCode: s.applicationCode, ResourceType: "auth_flow", ResourceID: s.applicationCode, Action: "login", Source: "api"})
 	}()
 	value, err := s.loginStates.ConsumeLoginTransaction(ctx, state)
 	if err != nil {
@@ -111,6 +126,13 @@ func (s *Service) CompleteLogin(ctx context.Context, state, code string) (result
 	if auth.ApplicationCode != s.applicationCode || auth.Subject != user.Subject || idToken.Subject != user.Subject {
 		return session.Session{}, errors.New("identity application mismatch")
 	}
+	if s.userResolver == nil || s.identityIssuer == "" {
+		return session.Session{}, errors.New("local user identity resolver is not configured")
+	}
+	platformUserUUID, err := s.userResolver.ResolveOrCreate(ctx, s.identityIssuer, user.Subject)
+	if err != nil {
+		return session.Session{}, fmt.Errorf("resolve local user identity: %w", err)
+	}
 	id, err := session.NewID()
 	if err != nil {
 		return session.Session{}, err
@@ -130,11 +152,30 @@ func (s *Service) CompleteLogin(ctx context.Context, state, code string) (result
 			return session.Session{}, err
 		}
 	}
-	result = session.Session{ID: id, Subject: user.Subject, Email: user.Email, ApplicationCode: auth.ApplicationCode, Permissions: permissions, RefreshTokenCiphertext: refreshToken, ExpiresAt: time.Now().Add(ttl)}
-	if err := s.sessions.Create(ctx, result); err != nil {
+	result = session.Session{ID: id, Subject: user.Subject, PlatformUserUUID: platformUserUUID, Email: user.Email, ApplicationCode: auth.ApplicationCode, Permissions: permissions, ProfileClaims: profileClaims(user), RefreshTokenCiphertext: refreshToken, ExpiresAt: time.Now().Add(ttl)}
+	persisted := result
+	persisted.ProfileClaims = nil
+	if err := s.sessions.Create(ctx, persisted); err != nil {
 		return session.Session{}, err
 	}
+	s.storeProfile(result.ID, result.ProfileClaims, result.ExpiresAt)
 	return result, nil
+}
+
+func profileClaims(user identity.UserInfo) map[string]any {
+	if user.Claims != nil {
+		return user.Claims
+	}
+	claims := map[string]any{}
+	for key, value := range map[string]string{
+		"sub": user.Subject, "preferred_username": user.Username, "name": user.Name,
+		"nickname": user.Nickname, "picture": user.Picture, "email": user.Email,
+	} {
+		if value != "" {
+			claims[key] = value
+		}
+	}
+	return claims
 }
 func (s *Service) Refresh(ctx context.Context, id string) (result session.Session, resultErr error) {
 	defer func() {
@@ -145,10 +186,17 @@ func (s *Service) Refresh(ctx context.Context, id string) (result session.Sessio
 		if err != nil {
 			return
 		}
-		_ = s.auditRecorder.Record(ctx, auditdomain.Event{ID: "evt-" + eventID, EventType: "AUTH_SESSION_REFRESH_FAILED", Outcome: "failure", ApplicationCode: s.applicationCode, ResourceType: "session", ResourceID: id, Action: "refresh", Source: "api"})
+		_ = s.auditRecorder.Record(ctx, plataudit.Event{ID: "evt-" + eventID, EventType: "AUTH_SESSION_REFRESH_FAILED", Outcome: "failure", ApplicationCode: s.applicationCode, ResourceType: "session", ResourceID: id, Action: "refresh", Source: "api"})
 	}()
 	if rotator, ok := s.sessions.(session.RefreshRotator); ok {
-		return rotator.RotateRefreshToken(ctx, id, s.rotateSession)
+		value, err := rotator.RotateRefreshToken(ctx, id, func(ctx context.Context, current session.Session) (session.Session, error) {
+			current.ProfileClaims = s.loadProfile(id, current.ExpiresAt)
+			return s.rotateSession(ctx, current)
+		})
+		if err == nil {
+			s.storeProfile(id, value.ProfileClaims, value.ExpiresAt)
+		}
+		return value, err
 	}
 	// Compatibility path for custom stores. Production uses the durable
 	// RotateRefreshToken implementation above.
@@ -158,6 +206,7 @@ func (s *Service) Refresh(ctx context.Context, id string) (result session.Sessio
 	if err != nil {
 		return session.Session{}, err
 	}
+	current.ProfileClaims = s.loadProfile(id, current.ExpiresAt)
 	if current.RefreshTokenCiphertext == "" {
 		return session.Session{}, ErrRefreshUnavailable
 	}
@@ -168,6 +217,7 @@ func (s *Service) Refresh(ctx context.Context, id string) (result session.Sessio
 	if err := s.sessions.Update(ctx, current); err != nil {
 		return session.Session{}, err
 	}
+	s.storeProfile(id, current.ProfileClaims, current.ExpiresAt)
 	return current, nil
 }
 func (s *Service) rotateSession(ctx context.Context, current session.Session) (session.Session, error) {
@@ -200,7 +250,12 @@ func (s *Service) rotateSession(ctx context.Context, current session.Session) (s
 	return current, nil
 }
 func (s *Service) Get(ctx context.Context, id string) (session.Session, error) {
-	return s.sessions.Get(ctx, id)
+	value, err := s.sessions.Get(ctx, id)
+	if err != nil {
+		return session.Session{}, err
+	}
+	value.ProfileClaims = s.loadProfile(id, value.ExpiresAt)
+	return value, nil
 }
 func (s *Service) Logout(ctx context.Context, id string) error {
 	current, err := s.sessions.Get(ctx, id)
@@ -217,6 +272,9 @@ func (s *Service) Logout(ctx context.Context, id string) error {
 		}
 	}
 	err = s.sessions.Revoke(ctx, id)
+	s.profileMu.Lock()
+	delete(s.profiles, id)
+	s.profileMu.Unlock()
 	if s.auditRecorder != nil {
 		eventID, idErr := session.NewID()
 		if idErr == nil {
@@ -227,11 +285,41 @@ func (s *Service) Logout(ctx context.Context, id string) error {
 			if current.Subject != "" {
 				subject = current.Subject
 			}
-			_ = s.auditRecorder.Record(ctx, auditdomain.Event{ID: "evt-" + eventID, EventType: eventType, Outcome: outcome, ActorSubject: subject, ApplicationCode: s.applicationCode, ResourceType: "session", ResourceID: id, Action: "logout", Source: "api"})
+			_ = s.auditRecorder.Record(ctx, plataudit.Event{ID: "evt-" + eventID, EventType: eventType, Outcome: outcome, ActorSubject: subject, ApplicationCode: s.applicationCode, ResourceType: "session", ResourceID: id, Action: "logout", Source: "api"})
 		}
 	}
 	return err
 }
+
+func (s *Service) storeProfile(id string, claims map[string]any, expiresAt time.Time) {
+	if len(claims) == 0 {
+		return
+	}
+	now := time.Now()
+	s.profileMu.Lock()
+	for key, profile := range s.profiles {
+		if !now.Before(profile.expiresAt) {
+			delete(s.profiles, key)
+		}
+	}
+	s.profiles[id] = cachedProfile{claims: claims, expiresAt: expiresAt}
+	s.profileMu.Unlock()
+}
+
+func (s *Service) loadProfile(id string, sessionExpiresAt time.Time) map[string]any {
+	s.profileMu.Lock()
+	defer s.profileMu.Unlock()
+	profile, ok := s.profiles[id]
+	if !ok {
+		return nil
+	}
+	if !time.Now().Before(profile.expiresAt) || !time.Now().Before(sessionExpiresAt) {
+		delete(s.profiles, id)
+		return nil
+	}
+	return profile.claims
+}
+
 func (s *Service) SetRemoteRevokeObserver(observer func(error)) { s.onRemoteRevoke = observer }
 func randomString(size int) (string, error) {
 	raw := make([]byte, size)

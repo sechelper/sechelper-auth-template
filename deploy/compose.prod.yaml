@@ -1,12 +1,9 @@
 services:
   api:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.api
+    image: sechelper-auth-template-api:${RELEASE_VERSION:?release version required}-${BUILD_ID:?Build ID required}-${DEPLOYMENT_ENVIRONMENT:?select a deployment environment}
+    command: ["--config", "/app/config.yaml"]
     environment:
-      APP_CONFIG_FILE: /app/config.yaml
-      APP_ENV: ${APP_ENV:?APP_ENV is required}
-      APP_VERSION: ${APP_VERSION:-release}
+      APP_ENV: ${DEPLOYMENT_ENVIRONMENT:?select a deployment environment}
       LISTEN_ADDR: ${LISTEN_ADDR:-0.0.0.0:8080}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
       IDENTITY_CLIENT_ID: ${IDENTITY_CLIENT_ID:?IDENTITY_CLIENT_ID is required}
@@ -27,13 +24,12 @@ services:
     restart: unless-stopped
 
   migrate:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.api
-    command: ["/app/auth-template-migrate", "--config", "/app/config.yaml"]
+    image: sechelper-auth-template-api:${RELEASE_VERSION:?release version required}-${BUILD_ID:?Build ID required}-${DEPLOYMENT_ENVIRONMENT:?select a deployment environment}
+    entrypoint: ["/app/auth-template-migrate"]
+    command: ["--config", "/app/config.yaml"]
     environment:
-      APP_CONFIG_FILE: /app/config.yaml
-      APP_ENV: ${APP_ENV:?APP_ENV is required}
+      APP_ENV: ${DEPLOYMENT_ENVIRONMENT:?select a deployment environment}
+      INCLUDE_EXAMPLE_MIGRATIONS: ${INCLUDE_EXAMPLE_MIGRATIONS:-0}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
     volumes:
       - ../config.yaml:/app/config.yaml:ro
@@ -42,9 +38,7 @@ services:
         condition: service_healthy
 
   web:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.web
+    image: sechelper-auth-template-web:${RELEASE_VERSION:?release version required}-${BUILD_ID:?Build ID required}-${DEPLOYMENT_ENVIRONMENT:?select a deployment environment}
     expose: ["80"]
     depends_on: [api]
     restart: unless-stopped

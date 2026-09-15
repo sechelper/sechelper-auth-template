@@ -1,5 +1,9 @@
 FROM golang:1.26.8 AS build
 WORKDIR /src/api
+ARG BUILD_ENV
+ARG CANONICAL_BUILD
+RUN test "$CANONICAL_BUILD" = 1 || { echo 'build images through the canonical make build entry point' >&2; exit 2; }
+RUN test "$BUILD_ENV" = development || { echo 'mock-idp may only be built for development' >&2; exit 2; }
 COPY api/go.mod api/go.sum ./
 RUN go mod download
 COPY api ./

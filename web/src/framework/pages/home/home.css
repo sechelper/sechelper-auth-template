@@ -1,0 +1,13 @@
+.public-shell { width: min(960px, calc(100% - 96px)); margin: 80px auto; }
+.public-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.public-shell .eyebrow { margin: 0; font: 12px/1.4 "DM Mono", monospace; letter-spacing: .14em; color: #71837b; }
+.public-shell .admin-entry { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #b9c9c1; border-radius: 8px; padding: 10px 15px; color: #18392e; background: white; font-size: 14px; font-weight: 700; text-decoration: none; transition: border-color .15s ease, background-color .15s ease; }
+.public-shell .admin-entry:hover { border-color: #75b957; background: #f0f8ec; }
+.public-shell .admin-entry span { font-size: 16px; line-height: 1; }
+.public-shell h1 { margin: 16px 0; font-size: 56px; line-height: 1.05; }
+.public-shell .lead { max-width: 620px; color: #71837b; font-size: 18px; }
+.public-shell button { margin-right: 10px; padding: 11px 18px; border: 0; border-radius: 8px; color: #18392e; background: #a8e878; cursor: pointer; font-weight: 700; }
+.public-shell button.secondary { border: 1px solid #b9c9c1; background: white; }
+.public-shell button:focus-visible, .public-shell .admin-entry:focus-visible { outline: 3px solid #75b957; outline-offset: 3px; }
+.public-card { margin-top: 48px; padding: 32px; border: 1px solid #dce4df; border-radius: 18px; background: white; box-shadow: 0 12px 28px rgba(24,57,46,.06); }
+.release-info { color: #65758b; font-size: .82rem; }

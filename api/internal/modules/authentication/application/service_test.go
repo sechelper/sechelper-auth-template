@@ -6,9 +6,74 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"sechelper-auth-template/api/internal/platform/identity"
 	"sechelper-auth-template/api/internal/platform/session"
 )
+
+type loginIdentity struct{ subject string }
+
+func (f loginIdentity) AuthorizationURL(state, nonce, challenge string) (string, error) {
+	return "https://idp.test/authorize", nil
+}
+func (f loginIdentity) ExchangeCode(context.Context, string, string) (identity.TokenSet, error) {
+	return identity.TokenSet{AccessToken: "access"}, nil
+}
+func (f loginIdentity) ValidateIDToken(context.Context, string, string) (identity.IDTokenClaims, error) {
+	return identity.IDTokenClaims{RegisteredClaims: jwt.RegisteredClaims{Subject: f.subject}}, nil
+}
+func (f loginIdentity) GetUserInfo(context.Context, string) (identity.UserInfo, error) {
+	return identity.UserInfo{Subject: f.subject, Nickname: "Mina", Picture: "https://cdn.example/avatar.png", Claims: map[string]any{"sub": f.subject, "nickname": "Mina", "picture": "https://cdn.example/avatar.png", "locale": "zh-CN"}}, nil
+}
+func (f loginIdentity) GetAuthorization(context.Context, string) (identity.Authorization, error) {
+	return identity.Authorization{Subject: f.subject, ApplicationCode: "app-1"}, nil
+}
+func (f loginIdentity) RefreshToken(context.Context, string) (identity.TokenSet, error) {
+	return identity.TokenSet{}, errors.New("not used")
+}
+func (f loginIdentity) RevokeToken(context.Context, string) error { return nil }
+
+type fixedUserResolver struct {
+	issuer, subject, platformUserUUID string
+}
+
+func (r *fixedUserResolver) ResolveOrCreate(_ context.Context, issuer, subject string) (string, error) {
+	r.issuer, r.subject = issuer, subject
+	return r.platformUserUUID, nil
+}
+
+func TestCompleteLoginStoresResolvedPlatformUserUUID(t *testing.T) {
+	ctx := context.Background()
+	store := session.NewMemoryStore()
+	if err := store.SaveLoginTransaction(ctx, session.LoginTransaction{State: "state", Nonce: "nonce", Verifier: "verifier", ExpiresAt: time.Now().Add(time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	resolver := &fixedUserResolver{platformUserUUID: "89cf8f29-9954-470d-b3de-8a37d20c6f44"}
+	service := NewService(loginIdentity{subject: "identity-subject"}, store, store, nil, time.Hour, "app-1")
+	service.SetUserResolver("https://identity.example", resolver)
+
+	created, err := service.CompleteLogin(ctx, "state", "authorization-code")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolver.issuer != "https://identity.example" || resolver.subject != "identity-subject" {
+		t.Fatalf("resolved identity = (%q, %q), want configured issuer and verified subject", resolver.issuer, resolver.subject)
+	}
+	if created.Subject != "identity-subject" || created.PlatformUserUUID != resolver.platformUserUUID {
+		t.Fatalf("session identity = (%q, %q), want external subject and local UUID", created.Subject, created.PlatformUserUUID)
+	}
+	if created.ProfileClaims["nickname"] != "Mina" || created.ProfileClaims["locale"] != "zh-CN" {
+		t.Fatalf("session profile claims = %#v, want all returned UserInfo claims", created.ProfileClaims)
+	}
+	stored, err := store.Get(ctx, created.ID)
+	if err != nil || stored.PlatformUserUUID != resolver.platformUserUUID || len(stored.ProfileClaims) != 0 {
+		t.Fatalf("stored session identity/profile = (%q, %#v), err = %v", stored.PlatformUserUUID, stored.ProfileClaims, err)
+	}
+	current, err := service.Get(ctx, created.ID)
+	if err != nil || current.ProfileClaims["picture"] != "https://cdn.example/avatar.png" {
+		t.Fatalf("current session profile cache = %#v, err = %v", current.ProfileClaims, err)
+	}
+}
 
 type rotationIdentity struct {
 	refreshCalls []string

@@ -1,12 +1,13 @@
 import React from "react";
+export { initialAdminPath, normalizePathname } from "./navigation-path.js";
+import { normalizePathname } from "./navigation-path.js";
 
 export const menu = [
   { path: "/admin", label: "概览", icon: "dashboard" },
-  { path: "/admin/manifest", label: "权限 Manifest", icon: "manifest", section: "账号与安全", permission: "auth:manifest:read" },
-  { path: "/admin/permissions", label: "权限清单", icon: "permissions", section: "账号与安全", permission: "auth:manifest:read" },
-  { path: "/admin/resources", label: "资源目录", icon: "resources", section: "账号与安全", permission: "admin:access" },
-  { path: "/admin/sessions", label: "活跃会话", icon: "sessions", section: "账号与安全", permission: "auth:session" },
-  { path: "/admin/audit-events", label: "操作审计", icon: "audit", section: "监控与审计", permission: "audit:read" },
+  { path: "/admin/permissions", label: "权限清单", icon: "permissions", section: "账号与安全", sectionOrder: 100, permission: "auth:manifest:read" },
+  { path: "/admin/resources", label: "资源目录", icon: "resources", section: "账号与安全", sectionOrder: 100, permission: "admin:access" },
+  { path: "/admin/sessions", label: "活跃会话", icon: "sessions", section: "账号与安全", sectionOrder: 100, permission: "auth:session" },
+  { path: "/admin/audit-events", label: "操作审计", icon: "audit", section: "监控与审计", sectionOrder: 200, permission: "audit:read" },
 ];
 
 const iconPaths = {
@@ -21,10 +22,9 @@ const iconPaths = {
   operations: ["M3 12h4l2-5 4 10 2-5h6", "M12 3a9 9 0 1 1-8.5 6"],
 };
 
-function NavIcon({ name }) {
+export function NavIcon({ name }) {
   return <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{(iconPaths[name] || iconPaths.dashboard).map((path) => <path d={path} key={path} />)}</svg>;
 }
 
-export function normalizePathname(pathname = window.location.pathname) { return pathname.replace(/\/$/, "") || "/admin"; }
 export function navigate(path) { window.history.pushState({}, "", path); window.dispatchEvent(new PopStateEvent("popstate")); }
-export function Link({ path, children, active, icon, collapsed }) { return <a href={path} className={active ? "nav-link active" : "nav-link"} aria-current={active ? "page" : undefined} title={collapsed ? children : undefined} onClick={(event) => { event.preventDefault(); navigate(path); }}><NavIcon name={icon} /><span className="nav-label">{children}</span></a>; }
+export function Link({ path, children, active, icon, collapsed, bullet = false }) { return <a href={path} className={active ? "nav-link active" : "nav-link"} aria-current={active ? "page" : undefined} title={collapsed ? children : undefined} onClick={(event) => { event.preventDefault(); navigate(path); }}>{bullet ? <span className="nav-bullet" aria-hidden="true">•</span> : <NavIcon name={icon} />}<span className="nav-label">{children}</span></a>; }

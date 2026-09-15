@@ -3,7 +3,6 @@
 app:
   name: auth-template
   environment: development
-  version: dev
   listenAddr: 127.0.0.1:8080
   publicWebOrigin: http://127.0.0.1:5173
   apiOrigin: http://127.0.0.1:8080

@@ -8,8 +8,8 @@ import (
 )
 
 type AppInfo struct {
-	Name, Version, Environment string
-	StartedAt                  time.Time
+	Name, Version, Environment, BuildID, SourceRevision string
+	StartedAt                                           time.Time
 }
 type Service struct {
 	db      *sql.DB

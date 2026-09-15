@@ -18,17 +18,29 @@ jobs:
       - name: Enforce framework/business boundaries
         run: make architecture-check
 
+      - name: Validate canonical release version
+        run: make release-check
+
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.8'
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version-file: .node-version
           cache: npm
           cache-dependency-path: |
             web/package-lock.json
             web/admin/package-lock.json
+
+      - name: Verify Node.js before package-manager installation
+        run: test "$(node --version)" = "v$(cat .node-version)"
+
+      - name: Pin the declared npm version
+        run: npm install --global npm@11.19.1 --no-audit --no-fund
+
+      - name: Verify toolchain declarations
+        run: make toolchain-check
 
       - name: Go format check
         working-directory: api
@@ -38,16 +50,28 @@ jobs:
         working-directory: api
         run: go test ./...
 
-      - name: Web dependencies, tests, and build
+      - name: Web dependencies and tests
         working-directory: web
-        run: npm ci && npm test && npm run build
+        run: npm ci && npm test
 
-      - name: Admin dependencies, tests, and build
+      - name: Admin dependencies and tests
         working-directory: web/admin
-        run: npm ci && npm test && npm run build
+        run: npm ci && npm test
 
       - name: OpenAPI validation
-        run: npx --yes @redocly/cli@1.34.0 lint docs/contracts/openapi.yaml
+        run: make openapi-lint
 
-      - name: Production image build
-        run: docker build -f deploy/Dockerfile.api -t auth-template-api . && docker build -f deploy/Dockerfile.web -t auth-template-web . && docker build -f deploy/Dockerfile.mock-idp -t auth-template-mock-idp .
+      - name: Canonical test artifact build
+        run: make build ENV=test ARTIFACT_MANIFEST="$RUNNER_TEMP/artifacts-test.json"
+
+      - name: Canonical production artifact build
+        run: make build ENV=production ARTIFACT_MANIFEST="$RUNNER_TEMP/artifacts-production.json"
+
+      - name: Upload canonical artifact manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifact-manifests
+          path: |
+            ${{ runner.temp }}/artifacts-test.json
+            ${{ runner.temp }}/artifacts-production.json
+          if-no-files-found: error

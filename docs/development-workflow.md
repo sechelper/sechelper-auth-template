@@ -1,37 +1,36 @@
 # 开发环境与质量门禁
 
-## 本地启动
+## 统一构建与启动
 
-项目使用专用 Compose project 启动 PostgreSQL、Redis、开发用 Mock Identity Provider、数据库迁移、API 和前端容器。API 依赖迁移服务成功完成后才启动：
+项目使用统一的配置载入入口和程序启动入口，环境差异由显式的 `ENV` 参数选择，不为测试或示例代码增加独立的启动入口。构建与运行命令如下：
 
 ```bash
-make dev
+make build ENV=development
+make run ENV=development ACTION=serve
+make run ENV=development ACTION=migrate
 ```
 
-默认地址：
+`ENV` 可取 `development`、`test` 或 `production`。`COMPONENT=all|api|web` 可缩小构建范围；`ACTION=serve|migrate` 选择统一入口中的程序行为。`make dev` 和 `make db-migrate` 是面向开发者的快捷别名，最终仍委托统一的运行流程。
 
-- 前台：http://localhost:8088
-- API：http://localhost:8080
-- 健康检查：http://localhost:8080/healthz
-- 就绪检查：http://localhost:8080/readyz
+开发环境默认使用专用 Compose project，地址与服务组成以 [deploy/compose.dev.yaml](../deploy/compose.dev.yaml) 及配置样例为准。测试、生产环境使用受控的部署 Compose 定义。不要在生产配置中启用示例模块或测试迁移。
 
-开发环境的身份平台地址是 Compose 内部的 `mock-idp:9000`，浏览器登录仍从 `localhost:8080` 回调到 API。Mock Identity Provider 只存在于开发 Compose，不得用于生产部署。
+API 与迁移程序均通过 `--config` 指定配置文件。配置由统一配置包载入，并校验配置环境与构建环境一致；不得在业务代码中自行读取环境变量、创建另一套配置加载方式或绕过启动入口。
 
-开发 Compose 使用项目专用的容器、网络和命名卷。停止服务但保留数据使用 `make dev-down`；清理数据时必须显式确认目标是本项目的开发 Compose project。
+## 迁移隔离
 
-Compose 开发栈使用 [deploy/config.dev.yaml](../deploy/config.dev.yaml)。手动运行 API 时，复制 `config.example.yaml` 为项目根目录的 `config.yaml`，只在本地填写非生产配置；秘密通过环境变量传入，不要提交 `config.yaml`。
+业务迁移按模块目录组织。每个模块可通过 `MODULE_KIND` 声明 `production` 或 `example`；未声明时按生产模块处理。生产构建只打包生产迁移，测试/开发构建可包含示例迁移。迁移程序在生产环境拒绝示例迁移，即使文件意外存在也不会执行。迁移版本名在全局账本中必须唯一。
 
 ## 常用验证
 
 ```bash
+make architecture-check
 make test
-make build
 make openapi-lint
-make docker-build
+make build ENV=test
 ```
 
-Go 的模块测试与生产构建不应把二进制、测试缓存、覆盖率文件或运行日志写回仓库。生产环境必须显式传入 `APP_CONFIG_FILE`，并在发布步骤单独执行数据库迁移。
+运行测试和构建前遵守 [测试环境说明](testing-environment.md)。不得在仓库留下二进制、测试缓存、覆盖率文件、运行日志或其他构建产物。生产构建仅用于正式发布流程；本地开发和测试不得连接或操作生产服务及数据。
 
 ## 新业务模块
 
-新模块必须遵循 [业务模块开发模板](business-module-template.md)，先更新 OpenAPI 和迁移，再实现后端与前端，最后补测试和文档。CI 会检查 Go 格式、Go 测试、前后台构建、OpenAPI 和生产镜像构建。
+新模块遵循[业务模块开发模板](business-module-template.md)，通过框架注册器接入权限、资源、审计事件和受保护路由。OpenAPI、迁移、实现、测试和文档均需归属同一个业务模块。CI 执行格式、测试、前后台构建、合同校验与架构检查；不得通过修改检查脚本或 CI 策略来规避失败。

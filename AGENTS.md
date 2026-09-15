@@ -1,0 +1,67 @@
+# AI 业务开发边界
+
+本文件适用于整个仓库。更完整的架构和二开规则见 `docs/architecture.md`、`docs/ai-development-rules.md` 和 `docs/business-module-template.md`。
+
+## 默认规则
+
+- 本仓库采用“框架基线只读、业务目录可写、未声明路径默认禁止”的策略。
+- 开始修改前先检查工作区，保留用户已有变更；不得覆盖、还原或顺带整理无关文件。
+- 普通业务开发只能修改下列业务可写路径。未明确允许的路径一律不得新增、修改、删除、移动或重命名。
+- 完成前检查完整 Git 差异，确保没有越界变化，并执行 `make architecture-check`。
+
+## 业务可写路径
+
+- `api/internal/business/<module>/**`
+- `api/migrations/business/<module>/**`
+- `web/src/business/<module>/**`
+- `web/admin/src/business/<module>/**`
+- `docs/business/<module>/**`
+- `docs/contracts/business/<module>/**`
+
+`<module>` 必须是明确的业务能力名称。不得使用 `common`、`shared`、`utils`、`platform` 或 `framework` 等名称建立绕过边界的通用目录。
+
+同一个业务能力在后端、业务前台和管理前台必须使用完全相同的 `<module>` 名称。某端没有实现时可以不创建空目录，但不得改用别名，也不得把业务源码放入框架目录。
+
+## 框架只读范围
+
+除业务可写路径外，仓库中的其他内容均属于框架基线或受控资产。以下重点路径在普通业务开发中明确禁止修改：
+
+- `api/cmd/**`
+- `api/internal/application/**`
+- `api/internal/platform/**`
+- `api/internal/modules/**`
+- `api/migrations/*.sql`
+- `api/migrations/framework/**`
+- `web/src/framework/**`、`web/src/main.jsx`
+- `web/admin/src/app/**`、`web/admin/src/modules/**`、`web/admin/src/platform/**`、`web/admin/src/shared/**`
+- `web/shared/**`
+- `deploy/**`、`scripts/**`、`.github/**`
+- `go.mod`、`go.sum`、所有 `package.json`、锁文件和构建配置
+- `.env*`、`config*.yaml`
+- 根目录工程文件、框架文档、主 OpenAPI 合同和本文件
+
+## 禁止绕过
+
+- 前后端模板、示例、测试样例、测试专用接口及测试数据库/数据库对象/测试数据仅限开发或测试环境使用，绝不允许被编译、打包、迁移、初始化或部署到正式环境；正式构建和发布必须明确排除这些内容。
+- 不得把框架代码复制到业务目录后修改。
+- 不得在业务目录重新实现认证、授权、Session、审计、事务、配置、日志或公共错误协议。
+- 后端业务不得读取环境变量、使用全局 Viper、创建全局数据库或缓存连接，也不得导入框架模块的内部实现。
+- 前端业务不得自行处理令牌、实现权威权限判断、修改应用入口/全局路由/Provider，或在前台与后台之间互相导入。
+- 不得修改测试、检查脚本、CI、策略或生成器以规避失败。
+- 不得修改、删除、移动或重命名历史迁移；业务迁移只能操作本模块拥有的数据库对象。
+- 跨业务模块只能通过稳定公开接口或事件合同协作，不得直接访问其他模块内部代码或数据表。
+
+## 框架维护任务
+
+如果业务需求需要修改框架只读路径，AI 必须先停止并报告准确路径、原因、影响、兼容性、测试和回滚方案。只有用户明确将当前任务切换为“框架维护任务”并授权具体路径后才可修改；一次授权不自动扩展到其他框架路径，也不得与普通业务改动混合。
+
+需要增加依赖、修改认证/授权语义、公共 API、框架数据库、配置、部署、CI、注册器或主 OpenAPI 时，一律按框架维护任务处理。
+
+## 业务交付检查
+
+- 变更只位于本次业务模块的允许路径。
+- 后端、前台、后台、业务迁移、合同、测试和文档属于同一业务模块。
+- 没有框架反向依赖业务实现，没有业务绕过框架公开接口。
+- 新迁移只追加且不接触框架数据库对象。
+- API 使用 `/v1/`；认证授权由服务端权威执行；后台路由位于 `/admin/` 并声明权限。
+- 按 `docs/testing-environment.md` 在指定环境完成格式、单元、合同和构建验证，不在仓库中留下构建产物。

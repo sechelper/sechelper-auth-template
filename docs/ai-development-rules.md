@@ -17,8 +17,9 @@
 - `api/migrations/001_authentication.sql`
 - `api/migrations/003_authentication_transactions.sql`
 - `api/migrations/004_audit_events.sql`
-- `web/src/app/**`
-- `web/src/platform/**`
+- `api/migrations/005_audit_event_model.sql`
+- `web/src/framework/**`
+- `web/src/main.jsx`
 - `web/admin/src/app/**`
 - `web/admin/src/platform/**`
 
@@ -31,13 +32,20 @@
 - `web/src/business/<module>/**`（业务前台）
 - `web/admin/src/business/<module>/**`（管理后台）
 - `docs/contracts/business/**`
-- `examples/**`
 
-业务模块必须通过唯一后端注册表，以及各自唯一的前台/后台注册表接入：前台只能登记到 `web/src/app/public-business-modules.js`，后台只能登记到 `web/admin/src/app/admin-business-modules.js`。前后台业务代码不得互相导入；后台路由必须位于 `/admin/` 并声明权限，前台路由不得进入 `/admin`。业务模块使用注入的 HTTP、事务、审计、授权、日志和配置接口，不得读取环境变量、创建全局连接、直接操作 Session Store 或自定义错误协议。
+业务模块必须通过唯一后端注册边界和前端自描述文件接入。业务前台在 `web/src/business/<module>/public-module.js` 声明路由，管理后台在 `web/admin/src/business/<module>/admin-module.js` 声明路由、导航和权限；框架注册器自动发现这些固定文件，普通业务任务不得修改注册器、应用入口或全局路由。只有改变声明协议或发现机制时才提交框架扩展申请。前后台业务代码不得互相导入；后台路由必须位于 `/admin/` 并声明权限，前台路由不得进入 `/admin`。业务模块使用注入的 HTTP、事务、审计、授权、日志和配置接口，不得读取环境变量、创建全局连接、直接操作 Session Store 或自定义错误协议。
+
+用户身份及个人资料由统一认证平台作为唯一权威来源保存。业务模块不得将用户信息复制或持久化到业务数据库；如界面需要，可在浏览器端缓存展示所需信息，并在适当时机从统一认证平台刷新。浏览器缓存仅用于展示，不得作为认证、授权或用户信息权威性的依据。
 
 ## AI 停止条件
 
 当任务要求触及受保护路径、改变认证/授权语义、改变公共响应格式或绕过契约测试时，AI 必须停止实现，说明触及的规则和所需授权；不得通过修改框架代码“先让业务跑起来”。
+
+## 正式环境隔离
+
+- 前后端模板、示例、测试样例、测试专用接口，以及测试数据库、测试数据库对象和测试数据只允许用于开发或测试环境，绝不允许编译、打包、迁移、初始化或部署到正式环境。
+- 正式构建与发布配置必须显式排除上述模板和测试资源；正式数据库迁移与初始化不得包含测试用 schema、表、数据或接口所需的测试数据。不得依赖“生产环境不会调用”作为保留测试接口或测试资源的理由。
+- 若无法确认某项资源是否会进入正式产物或正式数据库，AI 必须停止发布相关变更并报告该资源及其影响，确认隔离方式后再继续。
 
 ## 合并门禁
 

@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"sechelper-auth-template/api/internal/modules/authentication/application"
 	"sechelper-auth-template/api/internal/platform/config"
+	"sechelper-auth-template/api/internal/platform/httpkit"
 	"sechelper-auth-template/api/internal/platform/session"
 )
 
@@ -57,7 +58,13 @@ func (h *Handler) session(c *gin.Context) {
 		c.JSON(200, gin.H{"authenticated": false})
 		return
 	}
-	c.JSON(200, gin.H{"authenticated": true, "subject": value.Subject, "email": value.Email, "applicationCode": value.ApplicationCode, "permissions": value.Permissions, "expiresAt": value.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z07:00")})
+	response := identityFields(value)
+	response["authenticated"] = true
+	response["email"] = value.Email
+	response["applicationCode"] = value.ApplicationCode
+	response["permissions"] = value.Permissions
+	response["expiresAt"] = value.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z07:00")
+	c.JSON(200, response)
 }
 func (h *Handler) logout(c *gin.Context) {
 	if !h.validCSRF(c) {
@@ -83,7 +90,37 @@ func (h *Handler) refresh(c *gin.Context) {
 		return
 	}
 	h.setCookie(c, value.ID, value.ExpiresAt)
-	c.JSON(http.StatusOK, gin.H{"authenticated": true, "subject": value.Subject, "email": value.Email, "applicationCode": value.ApplicationCode, "permissions": value.Permissions, "expiresAt": value.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z07:00")})
+	response := identityFields(value)
+	response["authenticated"] = true
+	response["email"] = value.Email
+	response["applicationCode"] = value.ApplicationCode
+	response["permissions"] = value.Permissions
+	response["expiresAt"] = value.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z07:00")
+	c.JSON(http.StatusOK, response)
+}
+
+func identityFields(value session.Session) gin.H {
+	fields := gin.H{"subject": value.Subject, "identitySubject": value.Subject}
+	if len(value.ProfileClaims) > 0 {
+		fields["profile"] = value.ProfileClaims
+		fields["nickname"] = profileNickname(value.ProfileClaims, value.Subject)
+		if picture, ok := value.ProfileClaims["picture"].(string); ok && picture != "" {
+			fields["avatarUrl"] = picture
+		}
+	}
+	if value.PlatformUserUUID != "" {
+		fields["platformUserUuid"] = value.PlatformUserUUID
+	}
+	return fields
+}
+
+func profileNickname(profile map[string]any, fallback string) string {
+	for _, key := range []string{"nickname", "name", "preferred_username"} {
+		if value, ok := profile[key].(string); ok && value != "" {
+			return value
+		}
+	}
+	return fallback
 }
 func (h *Handler) current(c *gin.Context) (session.Session, error) {
 	return h.service.Get(c.Request.Context(), h.cookie(c))
@@ -129,5 +166,5 @@ func parseSameSite(value string) http.SameSite {
 	}
 }
 func writeError(c *gin.Context, status int, code string) {
-	c.JSON(status, gin.H{"error": gin.H{"code": code, "message": code, "requestId": c.GetHeader("X-Request-ID")}})
+	httpkit.WriteError(c, status, httpkit.Error{Code: code})
 }

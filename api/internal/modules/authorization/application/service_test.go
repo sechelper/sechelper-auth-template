@@ -22,6 +22,21 @@ func TestServiceRequiresPermission(t *testing.T) {
 	}
 }
 
+func TestResolveCarriesExternalAndPlatformUserIdentifiers(t *testing.T) {
+	store := session.NewMemoryStore()
+	localID := "89cf8f29-9954-470d-b3de-8a37d20c6f44"
+	if err := store.Create(context.Background(), session.Session{ID: "session-identifiers", Subject: "identity-subject", PlatformUserUUID: localID, ApplicationCode: "demo", ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	value, err := NewService(store, NewMemoryCache()).Resolve(context.Background(), "session-identifiers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.Subject != "identity-subject" || value.PlatformUserUUID != localID {
+		t.Fatalf("resolved identity = (%q, %q), want external subject and platform UUID", value.Subject, value.PlatformUserUUID)
+	}
+}
+
 func TestServiceRejectsMissingSession(t *testing.T) {
 	service := NewService(session.NewMemoryStore(), NewMemoryCache())
 	if _, err := service.Resolve(context.Background(), "missing"); err != ErrUnauthorized {

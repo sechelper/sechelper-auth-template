@@ -98,7 +98,7 @@ func (s *Service) Resolve(ctx context.Context, sessionID string) (domain.Context
 	for _, code := range current.Permissions {
 		permissions[code] = struct{}{}
 	}
-	value := domain.Context{Subject: current.Subject, ApplicationCode: current.ApplicationCode, Permissions: permissions}
+	value := domain.Context{Subject: current.Subject, PlatformUserUUID: current.PlatformUserUUID, ApplicationCode: current.ApplicationCode, Permissions: permissions}
 	if err := s.cache.Put(ctx, sessionID, value, current.ExpiresAt); err != nil {
 		return domain.Context{}, fmt.Errorf("%w: %v", ErrDependency, err)
 	}

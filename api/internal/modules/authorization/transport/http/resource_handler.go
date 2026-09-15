@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sechelper-auth-template/api/internal/modules/authorization/application"
 	"sechelper-auth-template/api/internal/modules/authorization/domain"
+	"sechelper-auth-template/api/internal/platform/httpkit"
 	"strings"
 )
 
@@ -49,7 +50,7 @@ func (h *ResourceHandler) Check(c *gin.Context) {
 		return
 	}
 	if h.recorder != nil {
-		h.recorder(c.Request.Context(), actor, decision, c.GetHeader("X-Request-ID"))
+		h.recorder(c.Request.Context(), actor, decision, httpkit.RequestID(c))
 	}
 	c.JSON(http.StatusOK, gin.H{"data": decision})
 }
@@ -57,5 +58,5 @@ func (h *ResourceHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": h.service.Definitions(), "meta": gin.H{"hasMore": false}})
 }
 func writeResourceError(c *gin.Context, status int, code string) {
-	c.AbortWithStatusJSON(status, gin.H{"error": gin.H{"code": code, "message": code, "requestId": c.GetHeader("X-Request-ID")}})
+	httpkit.WriteError(c, status, httpkit.Error{Code: code})
 }

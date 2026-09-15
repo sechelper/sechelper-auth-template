@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -50,6 +51,65 @@ func TestValidateIDTokenChecksNonceAndClaims(t *testing.T) {
 	}
 	if _, err := c.ValidateIDToken(t.Context(), raw, "wrong-nonce"); err == nil {
 		t.Fatal("ValidateIDToken accepted an invalid nonce")
+	}
+}
+
+func TestAuthorizationURLRequestsProfileScope(t *testing.T) {
+	c := NewClient(config.IdentityConfig{
+		AuthorizationEndpoint: "https://issuer.example/authorize",
+		ClientID:              "client-1",
+		RedirectURI:           "https://app.example/callback",
+		Scopes:                []string{"openid", "email"},
+	}, http.DefaultClient)
+	raw, err := c.AuthorizationURL("state", "nonce", "challenge")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Query().Get("scope") != "openid email profile" {
+		t.Fatalf("authorization scope = %q, want profile included", parsed.Query().Get("scope"))
+	}
+}
+
+func TestAuthorizationURLDeduplicatesConfiguredScopes(t *testing.T) {
+	c := NewClient(config.IdentityConfig{
+		AuthorizationEndpoint: "https://issuer.example/authorize",
+		ClientID:              "client-1",
+		RedirectURI:           "https://app.example/callback",
+		Scopes:                []string{"openid", "profile", "email", "profile"},
+	}, http.DefaultClient)
+	raw, err := c.AuthorizationURL("state", "nonce", "challenge")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Query().Get("scope") != "openid profile email" {
+		t.Fatalf("authorization scope = %q, want each scope once", parsed.Query().Get("scope"))
+	}
+}
+
+func TestGetUserInfoPreservesAllReturnedClaims(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer user-token" {
+			t.Fatalf("unexpected userinfo authorization: %q", r.Header.Get("Authorization"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"sub":"user-1","nickname":"Mina","picture":"https://cdn.example/avatar.png","locale":"zh-CN","updated_at":1700000000}`))
+	}))
+	defer server.Close()
+	c := NewClient(config.IdentityConfig{UserinfoEndpoint: server.URL}, server.Client())
+	value, err := c.GetUserInfo(t.Context(), "user-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.Nickname != "Mina" || value.Picture != "https://cdn.example/avatar.png" || value.Claims["locale"] != "zh-CN" {
+		t.Fatalf("userinfo claims not preserved: %+v", value)
 	}
 }
 

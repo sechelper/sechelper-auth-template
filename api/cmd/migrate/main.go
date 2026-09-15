@@ -8,16 +8,22 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"sechelper-auth-template/api/internal/platform/config"
 )
 
+var buildEnvironment = "production"
+
 func main() {
 	cfg, err := config.Load(os.Args[1:]...)
 	if err != nil {
 		fail(err)
+	}
+	if cfg.App.Environment != buildEnvironment {
+		fail(fmt.Errorf("migration binary build environment %q does not match config environment %q", buildEnvironment, cfg.App.Environment))
 	}
 	db, err := sql.Open("pgx", cfg.Database.URL())
 	if err != nil {
@@ -51,15 +57,22 @@ func main() {
 	if dir == "" {
 		dir = "migrations"
 	}
-	entries, err := filepath.Glob(filepath.Join(dir, "*.sql"))
+	entries, err := collectMigrations(dir)
 	if err != nil {
 		fail(err)
 	}
-	sort.Strings(entries)
+	includeExamples := os.Getenv("INCLUDE_EXAMPLE_MIGRATIONS") == "1"
 	for _, path := range entries {
 		name := filepath.Base(path)
-		// Example business migrations are opt-in and never part of the framework schema.
-		if name == "002_orders.sql" && os.Getenv("INCLUDE_EXAMPLE_MIGRATIONS") != "1" {
+		kind, err := migrationModuleKind(dir, path)
+		if err != nil {
+			fail(err)
+		}
+		apply, err := shouldApplyMigration(kind, cfg.App.Environment, includeExamples)
+		if err != nil {
+			fail(err)
+		}
+		if !apply {
 			continue
 		}
 		contents, err := os.ReadFile(path)
@@ -94,6 +107,70 @@ func main() {
 		}
 		fmt.Println("applied", name)
 	}
+}
+
+func collectMigrations(dir string) ([]string, error) {
+	entries := make([]string, 0)
+	seen := make(map[string]string)
+	err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
+			return nil
+		}
+		name := entry.Name()
+		if previous, exists := seen[name]; exists {
+			return fmt.Errorf("duplicate migration version %s: %s and %s", name, previous, path)
+		}
+		seen[name] = path
+		entries = append(entries, path)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		leftName, rightName := filepath.Base(entries[i]), filepath.Base(entries[j])
+		if leftName == rightName {
+			return entries[i] < entries[j]
+		}
+		return leftName < rightName
+	})
+	return entries, nil
+}
+
+func migrationModuleKind(root, path string) (string, error) {
+	relativeDirectory, err := filepath.Rel(root, filepath.Dir(path))
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasPrefix(filepath.ToSlash(relativeDirectory), "business/") {
+		return "production", nil
+	}
+	profilePath := filepath.Join(filepath.Dir(path), "MODULE_KIND")
+	contents, err := os.ReadFile(profilePath)
+	if os.IsNotExist(err) {
+		return "production", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read migration module profile %q: %w", profilePath, err)
+	}
+	kind := strings.TrimSpace(string(contents))
+	if kind != "production" && kind != "example" {
+		return "", fmt.Errorf("unsupported migration module kind %q in %s", kind, profilePath)
+	}
+	return kind, nil
+}
+
+func shouldApplyMigration(kind, environment string, includeExamples bool) (bool, error) {
+	if kind != "production" && kind != "example" {
+		return false, fmt.Errorf("unsupported migration module kind %q", kind)
+	}
+	if environment == "production" && includeExamples {
+		return false, fmt.Errorf("example migrations are forbidden in production")
+	}
+	return kind != "example" || (environment != "production" && includeExamples), nil
 }
 
 func fail(err error) { fmt.Fprintln(os.Stderr, err); os.Exit(1) }

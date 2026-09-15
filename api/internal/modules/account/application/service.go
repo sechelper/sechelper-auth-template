@@ -3,18 +3,17 @@ package application
 import (
 	"context"
 	"errors"
-	auditapplication "sechelper-auth-template/api/internal/modules/audit/application"
-	auditdomain "sechelper-auth-template/api/internal/modules/audit/domain"
+	plataudit "sechelper-auth-template/api/internal/platform/audit"
 	"sechelper-auth-template/api/internal/platform/session"
 )
 
 type Service struct {
 	sessions      session.Store
-	auditRecorder auditapplication.Recorder
+	auditRecorder plataudit.Recorder
 }
 
-func NewService(sessions session.Store) *Service                       { return &Service{sessions: sessions} }
-func (s *Service) SetAuditRecorder(recorder auditapplication.Recorder) { s.auditRecorder = recorder }
+func NewService(sessions session.Store) *Service                { return &Service{sessions: sessions} }
+func (s *Service) SetAuditRecorder(recorder plataudit.Recorder) { s.auditRecorder = recorder }
 func (s *Service) ListSessions(ctx context.Context, subject string, limit int) ([]session.Session, error) {
 	return s.sessions.ListBySubject(ctx, subject, limit)
 }
@@ -31,7 +30,7 @@ func (s *Service) RevokeSession(ctx context.Context, subject, id string) error {
 			if err != nil {
 				eventType, outcome = "AUTH_SESSION_REVOKE_FAILED", "failure"
 			}
-			_ = s.auditRecorder.Record(ctx, auditdomain.Event{ID: "evt-" + eventID, EventType: eventType, Outcome: outcome, ActorSubject: subject, ApplicationCode: value.ApplicationCode, ResourceType: "session", ResourceID: id, Action: "revoke", Source: "admin_ui"})
+			_ = s.auditRecorder.Record(ctx, plataudit.Event{ID: "evt-" + eventID, EventType: eventType, Outcome: outcome, ActorSubject: subject, ApplicationCode: value.ApplicationCode, ResourceType: "session", ResourceID: id, Action: "revoke", Source: "admin_ui"})
 		}
 	}
 	return err

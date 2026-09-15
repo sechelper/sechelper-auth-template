@@ -49,10 +49,13 @@ type IDTokenClaims struct {
 	jwt.RegisteredClaims
 }
 type UserInfo struct {
-	Subject  string `json:"sub"`
-	Username string `json:"preferred_username"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
+	Subject  string         `json:"sub"`
+	Username string         `json:"preferred_username"`
+	Name     string         `json:"name"`
+	Nickname string         `json:"nickname"`
+	Picture  string         `json:"picture"`
+	Email    string         `json:"email"`
+	Claims   map[string]any `json:"-"`
 }
 type Permission struct {
 	Code      string `json:"permission_code"`
@@ -81,13 +84,31 @@ func (c *Client) AuthorizationURL(state, nonce, challenge string) (string, error
 	q.Set("client_id", c.cfg.ClientID)
 	q.Set("response_type", "code")
 	q.Set("redirect_uri", c.cfg.RedirectURI)
-	q.Set("scope", strings.Join(c.cfg.Scopes, " "))
+	q.Set("scope", strings.Join(withProfileScope(c.cfg.Scopes), " "))
 	q.Set("state", state)
 	q.Set("nonce", nonce)
 	q.Set("code_challenge", challenge)
 	q.Set("code_challenge_method", "S256")
 	u.RawQuery = q.Encode()
 	return u.String(), nil
+}
+
+func withProfileScope(scopes []string) []string {
+	result := make([]string, 0, len(scopes)+1)
+	seen := make(map[string]struct{}, len(scopes)+1)
+	for _, value := range scopes {
+		for _, scope := range strings.Fields(value) {
+			if _, exists := seen[scope]; exists {
+				continue
+			}
+			seen[scope] = struct{}{}
+			result = append(result, scope)
+		}
+	}
+	if _, exists := seen["profile"]; !exists {
+		result = append(result, "profile")
+	}
+	return result
 }
 
 func (c *Client) ExchangeCode(ctx context.Context, code, verifier string) (TokenSet, error) {
@@ -334,10 +355,19 @@ func (c *Client) GetUserInfo(ctx context.Context, accessToken string) (UserInfo,
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return UserInfo{}, fmt.Errorf("identity userinfo rejected: http %d", res.StatusCode)
 	}
-	var out UserInfo
-	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&out); err != nil || out.Subject == "" {
+	var raw map[string]any
+	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&raw); err != nil {
 		return UserInfo{}, errors.New("identity userinfo response is invalid")
 	}
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return UserInfo{}, errors.New("identity userinfo response is invalid")
+	}
+	var out UserInfo
+	if err := json.Unmarshal(encoded, &out); err != nil || out.Subject == "" {
+		return UserInfo{}, errors.New("identity userinfo response is invalid")
+	}
+	out.Claims = raw
 	return out, nil
 }
 func (c *Client) GetAuthorization(ctx context.Context, accessToken string) (Authorization, error) {

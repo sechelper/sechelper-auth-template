@@ -7,7 +7,7 @@
 /api/internal/modules/account/ @framework-owner
 /api/internal/modules/operations/ @framework-owner
 /api/cmd/server/main.go @framework-owner
-/web/src/app/ @framework-owner
-/web/src/platform/ @framework-owner
+/web/src/framework/ @framework-owner
+/web/src/main.jsx @framework-owner
 /web/admin/src/app/ @framework-owner
 /web/admin/src/platform/ @framework-owner

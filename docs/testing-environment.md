@@ -1,5 +1,43 @@
 # 远程测试环境
 
+## 平台总览服务器资源 API 远程验证（2026-09-16 00:07 Asia/Shanghai）
+
+- 验证源：当前未提交工作树的后台 Dashboard/API 资源改动；在测试主机 `/tmp/sechelper-resource-api-check.8ehPva` 临时源码快照中验证，未替换 `/opt/sechelper-auth-template` 下的服务源码。
+- 工具链与结果：Go 1.26.8 `go test ./...`、API `go build` 及后续 Dashboard 资源采集器定向测试通过；Node.js v24.21.0、npm 11.19.0 下 Admin 测试 17 项通过，Vite 7.1.7 production 构建转换 50 个模块成功。OpenAPI YAML 语法及 Dashboard resources schema 结构检查通过；Redocly CLI lint 未完成，因远端 npm 缓存缺少 `@opentelemetry/api-logs`（`ENOTCACHED`），未安装或改动项目依赖。
+- 清理与运行影响：临时源码、Go 缓存、编译产物、Admin dist 和 npm cache 已清理；`order-test.service` 保持 active。没有部署或替换线上静态资源，未重启服务、未修改 API 二进制、数据库、Redis、Nginx、systemd、运行配置或业务数据。
+
+## 平台总览夜间样式远程验证（2026-09-15 22:25 Asia/Shanghai）
+
+- 仅将获准的 `web/admin/src/style.css` 临时同步到测试主机进行验证；Admin 测试 15 项通过，Vite 7.1.7 production 构建转换 50 个模块成功。
+- 验证后恢复远端原样式，清理本次生成的 `web/admin/dist` 和临时备份；未替换线上 `/admin` 静态资源，未重启服务或修改 API、数据库、Redis、Nginx、systemd 及业务数据。
+
+## 平台总览夜间适配与 Manifest 按钮远程部署（2026-09-15 22:33 Asia/Shanghai）
+
+- 目标：`root@47.116.4.57:/opt/sechelper-auth-template`，测试域名 `order-test.sechelper.com`。
+- 部署源：当前授权工作树的 `web/admin/src/modules/dashboard/DashboardPage.jsx`（SHA-256 `6808613c7c1a3f9c177bcc9b3761e34ecad8190baa047bbb92ef09e003543167`）和 `web/admin/src/style.css`（SHA-256 `ab6a6600ecac5bb68942966a2c580fe32a7aa9be593751e015e659d1e27e0387`）；仅同步这两个文件并更新后台静态资源 `/opt/sechelper-auth-template/web/dist/admin`。
+- 构建验证：复用远程 Node.js `v24.21.0`、npm `11.19.0`、Vite `7.1.7`；`npm test` 15 项通过，`npm run build` 转换 50 个模块成功。架构检查尝试执行但未完成，因主机缺少 `rg`（退出码 127）；未安装额外工具或修改检查脚本。
+- 验收：线上新 JS 不再含“查看权限清单”按钮文字，CSS 包含夜间状态色板与资源/Manifest 等高布局；后台及其 JS/CSS、`/healthz`、`/readyz` 均返回 HTTP 200；未认证访问 `/v1/admin/dashboard/overview` 返回预期 HTTP 401；`order-test.service` 保持 active。
+- 运行影响：仅原子替换后台静态资源；未重启服务或 reload Nginx，未修改 API、PostgreSQL、Redis、Nginx 配置、systemd、运行配置或业务数据。未部署尚待授权的服务器资源采集 API。
+- 回滚：部署前两份源码及原后台静态目录位于 `/opt/sechelper-auth-template/.deploy-backup-platform-overview-night-layout-20260915T223200/`；恢复该目录下 `source/` 和 `admin-dist/` 即可回退。
+
+## Frest 组件参考目录远程部署（2026-09-15 14:38 Asia/Shanghai）
+
+- 目标：测试主机 `47.116.4.57`，项目路径 `/opt/sechelper-auth-template`，测试域名 `order-test.sechelper.com`。源代码来自本地未提交工作树中的 `web/admin/src/business/component-reference/`；本次部署快照以同步文件校验和标识：`ComponentReferencePage.jsx` SHA-256 `adc05993f7eae5ba6209c17d202055ad6e06f9be92cf8c215884dac9d24c55e5`，`component-reference.css` SHA-256 `893409eab954469637eebaa0c8839b1f6499158c76aa63b3e0aa18e8df0e626d`。Git 修订号未记录，因为部署源含未提交改动。
+- 范围：仅同步组件参考业务模块三个文件；远程以 `npm ci --no-audit --no-fund` 安装锁文件依赖，执行后台 `npm test` 和 `npm run build -- --mode test`，并将测试模式 Admin 静态构建替换至 `web/dist/admin`。构建包含 `/admin/component-reference` 测试路由，不含 API 或数据库改动。
+- 工具链与运行：复用远程 Node.js `v24.21.0`、npm `11.19.0`（已存在的 root 用户工具链）；依赖安装作用域为项目 `web/admin/node_modules`。`npm ci` 提示 `esbuild@0.25.12` 安装脚本尚未列入 `allowScripts`，但安装、测试与构建均成功。测试通过 15 项；Vite `7.1.7` 测试构建成功，转换 55 个模块。构建/测试命令为 `npm test` 与 `npm run build -- --mode test`；本次为静态资源更新，没有执行服务启动命令。`order-test.service` 保持 active，由现有主机 Nginx 提供前后台静态资源；部署未重启服务、未 reload Nginx。
+- 验收：`https://order-test.sechelper.com/admin/` 与 `/admin/component-reference` 均返回 HTTP 200；部署静态资源包含组件参考路由；服务状态为 active。`make architecture-check` 在远端未能完成，因主机缺少 `rg`，检查脚本按设计以扫描失败退出；同一工作树部署前本地 `make architecture-check` 已通过，未安装额外扫描工具或修改检查脚本。
+- 数据与清理：未连接或操作 PostgreSQL、Redis、业务数据；未执行迁移。保留远端 `web/admin/node_modules` 供后续锁文件构建复用；部署后清理本次生成的 `web/admin/dist`，线上静态产物保留在 `web/dist/admin`。部署前源码与 Admin 静态产物备份位于 `/opt/sechelper-auth-template/.deploy-backup-component-reference-20260915T063624Z`，含 `web/admin/src/business/component-reference/` 和原 `web/dist/admin/`；目录内另有部署切换时保存的原线上静态目录 `web/dist/admin-live-before-swap/`。
+- 回滚：恢复备份中的 `web/admin/src/business/component-reference/`，并用备份中的 `web/dist/admin/` 替换 `/opt/sechelper-auth-template/web/dist/admin/`；无需重启服务或 reload Nginx。
+
+## 业务目录基线清库全量重部署（2026-09-14 22:16 Asia/Shanghai）
+
+- 源码：以本地 `main` 的 `ed93095750f2b6b4745d6c23ee4047d2482d2e3a` 加当前未提交工作树为事实版本，全量同步到 `root@47.116.4.57:/opt/sechelper-auth-template`；同步包排除 `.git/`、`.env`、`config.yaml`、密钥、依赖缓存、构建产物和日志。远程旧的 `admin/`、`shared/`、`e2e/` 及旧源码目录已由当前代码结构替换。
+- 构建验证：远程使用 Go 1.26.8、Node v24.21.0 和 npm 11.19.0；Go 全量测试、`example` Orders 测试、API 与迁移器编译、公共前台测试/生产构建、管理前台测试/生产构建全部通过。第一次解包因 macOS AppleDouble `._*` 旁车文件导致前台测试失败，在停服和清库前已中止；重新生成无 xattr/AppleDouble 的同步包后全量验证通过。
+- 数据清理：仅停止 `order-test.service` 并删除、重建项目专用容器 `sechelper-auth-template-dev-postgres-1` 中的测试数据库 `auth_template`。统一认证 PostgreSQL 未操作；服务使用的 Redis 为统一认证共享实例，未清理、未重启、未修改配置或数据。
+- 迁移：递归读取 `/opt/sechelper-auth-template/api/migrations`，成功应用 `001_authentication.sql`、业务迁移 `business/orders/002_orders.sql`、`003_authentication_transactions.sql`、`004_audit_events.sql` 和 `005_audit_event_model.sql`。`schema_migrations` 为 5；认证 Session、登录事务、审计事件和订单均为 0。服务启动后 Manifest 自动同步生成 1 条状态记录，状态为 `applied`、版本 2、服务端修订 2。
+- 部署结果：`order-test.service` 已启动且为 active；`https://order-test.sechelper.com/healthz` 与 `/readyz` 均返回 200，前台 `/`、后台 `/admin/` 和 `/v1/auth/session` 均返回 200，会话响应为未认证。当前源码结构已验证存在 `api/internal/business/orders/`、`web/src/framework/`、`web/admin/src/business/orders/` 和 `api/migrations/business/orders/002_orders.sql`，旧 `api/internal/modules/orders/` 不存在。
+- 恢复点：`/opt/sechelper-auth-template/.deploy-backup-business-layout-20260914T221614`，包含权限为 600 的 `.env`、`config.yaml`、部署前源码归档和 PostgreSQL 自定义格式备份 `postgres-before-reset.dump`。本次临时上传目录、远程编译目录和临时 Go 缓存已清理；Nginx 配置未修改且无需 reload。
+
 ## 后台导航分组远程重新部署（2026-09-14 19:56 Asia/Shanghai）
 
 - 当前变更：同步 `admin/src/app/navigation.jsx`，移除“权限与资源”分组，将权限 Manifest、权限清单、资源目录和活跃会话归入“账号与安全”，将订单归入同级的“业务运营”。
@@ -140,13 +178,13 @@
 - 远程构建提示：前后台 `npm ci` 均报告 1 个 high severity audit vulnerability；本次未执行 `npm audit fix --force`，避免未授权升级依赖。
 - 本次部署备份：`/opt/sechelper-auth-template/.deploy-backup-admin-split-20260913T214949`。
 - Manifest 补同步：部署初次启动时身份平台返回 HTTP 502，导致启动同步失败；身份平台恢复后于 21:56 重启业务服务触发同步。远端 Manifest 当前为版本 3、服务端修订 3、状态 `consistent`；本地 `authorization_manifest_state` 已包含 `admin:access`，状态为 `applied`。
-- 后台样式更新：2026-09-13 23:10 Asia/Shanghai 在远程主机完成 `admin/` 的 `npm ci` 和 Vite 生产构建，部署 Sneat Bootstrap FREE 风格样式到 `/admin`；`/admin/`、`/admin/orders`、新版 CSS 静态资源均返回 HTTP 200。备份位于 `/opt/sechelper-auth-template/.deploy-backup-admin-style-20260913T231020`。Go 服务、PostgreSQL、Redis 和 Nginx 配置未修改；Nginx 仅执行了配置验证，未重新加载。
+- 后台样式更新：2026-09-13 23:10 Asia/Shanghai 在远程主机完成 `admin/` 的 `npm ci` 和 Vite 生产构建，部署管理端样式到 `/admin`；`/admin/`、`/admin/orders`、新版 CSS 静态资源均返回 HTTP 200。备份位于 `/opt/sechelper-auth-template/.deploy-backup-admin-style-20260913T231020`。Go 服务、PostgreSQL、Redis 和 Nginx 配置未修改；Nginx 仅执行了配置验证，未重新加载。
 - 左上角社区标识更新：2026-09-13 23:21 Asia/Shanghai 在远程主机同步 `admin/src/`、`admin/public/`、`admin/index.html`、`admin/package.json`、`admin/package-lock.json` 和 `admin/vite.config.js`，完成远程 `npm ci` 与 Vite 生产构建，并将产物同步到 `/opt/sechelper-auth-template/web/dist/admin`。`https://order-test.sechelper.com/admin/`、`/admin/assets/logo/logo.svg`、`/healthz`、`/readyz` 返回成功；`order-test.service` 保持 active。Go 服务、PostgreSQL、Redis、业务容器和 Nginx 配置未修改，未重启服务或重载 Nginx。本次 npm 审计仍报告 1 个 high severity vulnerability，未执行强制依赖升级。
 - 错误状态页更新：2026-09-13 23:28 Asia/Shanghai 在远程主机同步 `admin/src/app/AdminApp.jsx`、`admin/src/style.css` 和 `admin/README.md`，由远程 Node 工具链完成 Vite 生产构建，并将后台产物更新到 `/opt/sechelper-auth-template/web/dist/admin`。新增统一 403、404、500 页面及返回/重试操作；`/admin/` 与新版 CSS 返回 HTTP 200，`/healthz`、`/readyz` 返回 HTTP 200，`order-test.service` 保持 active。Go 服务、PostgreSQL、Redis、业务容器和 Nginx 配置未修改，未重启服务或重载 Nginx。本次部署备份位于 `/opt/sechelper-auth-template/.deploy-backup-error-pages-20260913T232821`。
 - 部署期间修复两处兼容性问题：身份平台端点校验错误限制 OAuth 路径；Manifest 状态持久化未写入现有数据库要求的 `canonical_json` 字段。对应代码已同步到本地源码和远程构建目录。
 - 首次启动失败日志仍保留在远程 `/opt/sechelper-auth-template/logs/auth-template-debug.log` 和 `auth-template.jsonl`，最新启动已记录 `server.started`，服务当前正常。
 - 后台主页重新部署：2026-09-14 00:00 Asia/Shanghai 在远程主机同步 `admin/src/`、`admin/public/`、`admin/index.html`、`admin/package.json`、`admin/package-lock.json`、`admin/vite.config.js` 和 `admin/README.md`，远程执行 `npm ci --no-audit --no-fund` 与 `npm run build`，将构建产物更新到 `/opt/sechelper-auth-template/web/dist/admin`。部署前备份位于 `/opt/sechelper-auth-template/.deploy-backup-admin-home-20260914T000034`。`/admin/`、新版 JS/CSS、`/healthz`、`/readyz` 返回成功；`/v1/auth/session` 返回 `{"authenticated":false}`；未认证访问 `/v1/authorization/me` 返回 HTTP 401；`order-test.service` 保持 active。Go 服务、PostgreSQL、Redis、业务容器和 Nginx 配置未修改，未重启服务或重载 Nginx。
-- 错误页面重新部署：2026-09-14 00:07 Asia/Shanghai 在远程主机同步 `admin/src/app/AdminApp.jsx`、`admin/src/style.css` 和 `admin/README.md`，远程执行 `npm ci --no-audit --no-fund` 与 `npm run build`，将 Sneat 风格 403/404/500 页面构建产物更新到 `/opt/sechelper-auth-template/web/dist/admin`。部署前备份位于 `/opt/sechelper-auth-template/.deploy-backup-admin-errors-20260914T000703`。远程 CSS 含 `error-screen` 且不再包含旧 `incident-screen`；`/admin/`、新版 JS/CSS、`/healthz`、`/readyz` 返回成功；`/v1/auth/session` 返回 `{"authenticated":false}`；未认证访问 `/v1/authorization/me` 返回 HTTP 401；`order-test.service` 保持 active。Go 服务、PostgreSQL、Redis、业务容器和 Nginx 配置未修改，未重启服务或重载 Nginx。
+- 错误页面重新部署：2026-09-14 00:07 Asia/Shanghai 在远程主机同步 `admin/src/app/AdminApp.jsx`、`admin/src/style.css` 和 `admin/README.md`，远程执行 `npm ci --no-audit --no-fund` 与 `npm run build`，将 403/404/500 页面构建产物更新到 `/opt/sechelper-auth-template/web/dist/admin`。部署前备份位于 `/opt/sechelper-auth-template/.deploy-backup-admin-errors-20260914T000703`。远程 CSS 含 `error-screen` 且不再包含旧 `incident-screen`；`/admin/`、新版 JS/CSS、`/healthz`、`/readyz` 返回成功；`/v1/auth/session` 返回 `{"authenticated":false}`；未认证访问 `/v1/authorization/me` 返回 HTTP 401；`order-test.service` 保持 active。Go 服务、PostgreSQL、Redis、业务容器和 Nginx 配置未修改，未重启服务或重载 Nginx。
 - 正式后台掌机错误页远程部署：2026-09-14 01:05 Asia/Shanghai 在远程主机同步 `admin/src/app/AdminApp.jsx`、`admin/src/style.css`、`admin/public/`、`admin/index.html`、`admin/package.json`、`admin/package-lock.json`、`admin/vite.config.js` 和 `admin/README.md`，远程执行 `npm ci --no-audit --no-fund` 与 `npm run build`，将完整掌机版 403/404/500 页面构建产物更新到 `/opt/sechelper-auth-template/web/dist/admin`。部署前备份位于 `/opt/sechelper-auth-template/.deploy-backup-admin-handheld-20260914T010517`。线上构建已包含 `handheld-error`、屏幕游戏数据面板以及 `handheld-forbidden`/`handheld-server` 颜色变体；`/admin/`、新版 JS/CSS、`/healthz`、`/readyz` 返回成功；`/v1/auth/session` 返回 `{"authenticated":false}`；未认证访问 `/v1/authorization/me` 返回 HTTP 401；`order-test.service` 保持 active。Go 服务、PostgreSQL、Redis、业务容器和 Nginx 配置未修改，未重启服务或重载 Nginx。
 - 全局错误页远程部署：2026-09-14 01:19 Asia/Shanghai 在远程主机同步 `shared/error-pages/`、`web/src/app/App.jsx`、`web/src/style.css`、`web/vite.config.js`、`admin/src/app/AdminApp.jsx`、`admin/vite.config.js` 及相关前端清单，远程分别执行 `web` 与 `admin` 的 `npm ci --no-audit --no-fund` 和 `npm run build`，更新 `/opt/sechelper-auth-template/web/dist` 及其 `admin` 子目录。部署前备份位于 `/opt/sechelper-auth-template/.deploy-backup-global-errors-20260914T011621`。验收确认前台和后台构建包均包含共享 `global-error-page`、`SECHELPER COMMUNITY` 和全局 403/404/500 组件；`/`、`/admin/`、新版 JS/CSS、`/healthz`、`/readyz` 返回成功；`/v1/auth/session` 返回 `{"authenticated":false}`；未认证访问 `/v1/authorization/me` 返回 HTTP 401；`order-test.service` 保持 active。Go 服务、PostgreSQL、Redis、业务容器和 Nginx 配置未修改，未重启服务或重载 Nginx。
 - 全局错误页纵向布局远程部署：2026-09-14 01:22 Asia/Shanghai 在远程主机同步 `shared/error-pages/GlobalErrorPage.jsx`、`shared/error-pages/error-pages.css`、`web/src/`、`admin/src/` 及前后台清单，远程分别完成 `npm ci --no-audit --no-fund` 和 `npm run build`，更新 `/opt/sechelper-auth-template/web/dist` 与 `/opt/sechelper-auth-template/web/dist/admin`。部署前备份位于 `/opt/sechelper-auth-template/.deploy-backup-global-errors-layout-20260914T012223`。验收确认前台和后台均包含“顶部大号状态数字 + 下方掌机”布局、共享错误页样式和 403/404/500 状态色；`/`、`/admin/`、新版 JS/CSS、`/healthz`、`/readyz` 返回成功；`/v1/auth/session` 返回 `{"authenticated":false}`；未认证访问 `/v1/authorization/me` 返回 HTTP 401；`order-test.service` 保持 active。Go 服务、PostgreSQL、Redis、业务容器和 Nginx 配置未修改，未重启服务或重载 Nginx。
@@ -166,3 +204,108 @@
 - 数据库：显式使用 `MIGRATIONS_DIR=/opt/sechelper-auth-template/api/migrations` 应用全部 5 个迁移；`schema_migrations` 记录数为 5。
 - 验证：`order-test.service` active；`/healthz`、`/readyz`、前台 `/`、后台 `/admin/` 和 `/v1/auth/session` 均返回 HTTP 200；Nginx `nginx -t` 成功并已 reload。
 - 回滚：API 旧二进制和旧前端静态资源位于同一备份目录；数据库可使用上述 dump 恢复。未执行 Redis 清空或数据库之外的破坏性操作。
+
+# 前端业务模块自动发现重新部署（2026-09-14 22:34 Asia/Shanghai）
+
+- 目标：`root@47.116.4.57:/opt/sechelper-auth-template`，业务服务 `order-test.service`。
+- 发布：同步前后台业务模块自动发现注册器、后台直达路由权限校验、禁用的订单演示声明及对应文档；未同步 `.git/`、`.env`、`config.yaml`、密钥、依赖缓存或本地构建产物。
+- 验证：远程 Go 全量测试、API/迁移编译、Web/Admin 单元测试和生产构建通过；Vite 分别转换 37 和 49 个模块。`order-test.service` 保持 active；前台、`/admin/`、`/healthz`、`/readyz` 返回 HTTP 200，未认证访问 `/v1/authorization/me` 返回 HTTP 401。
+- 运行影响：仅更新远端前后台静态产物；Go 二进制、systemd、Nginx 配置、PostgreSQL、Redis、迁移和业务数据均未修改，服务未重启，Nginx 未 reload。`nginx -t` 成功，仍有主机既存的重复 TLS protocol options 警告。
+- 依赖：前后台按锁文件执行 `npm ci --no-audit --no-fund`，未升级依赖或执行强制漏洞修复；npm 提示 `esbuild@0.25.12` 的安装脚本尚未列入 `allowScripts`，生产构建仍成功。
+- 回滚：被替换的注册器源码和部署前完整静态产物位于 `/opt/sechelper-auth-template/.deploy-backup-module-discovery-20260914T222921`；恢复该目录中的 `web/dist` 即可回退静态站点。
+
+# Orders 示例实例启用（2026-09-14 22:48 Asia/Shanghai）
+
+- 目标：`root@47.116.4.57:/opt/sechelper-auth-template`，业务服务 `order-test.service`。
+- 构建：默认模式 Go 全量测试、Web/Admin 单元测试通过；`make example-orders-build` 完成 `example` 标签下的 Go 全量测试和 API 编译，订单 Application 测试通过；前后台 Vite 生产构建通过。
+- 启用：后台 `web/admin/src/business/orders/admin-module.js` 已启用；API 使用 `-tags=example` 构建，通过受控业务运行时注册 `order:read`、`example-order` 资源和 `/v1/orders` 路由，路由同时要求 `admin:access` 与 `order:read`。
+- 发布：原子替换 `/opt/sechelper-auth-template/bin/auth-template`、更新前后台静态产物并重启 `order-test.service`。服务为 active；`/healthz`、`/readyz`、`/admin/` 返回 HTTP 200，未认证访问 `/v1/orders` 由启用前的 HTTP 404 变为 HTTP 401，确认路由存在且认证保护生效。`/readyz` 为 200，启动 Manifest 同步成功。
+- 数据：沿用 2026-09-14 20:51 已应用的 `api/migrations/business/orders/002_orders.sql`，本次未执行迁移，未修改 PostgreSQL、Redis、Nginx、运行配置或现有业务数据。
+- 回滚：旧 API 二进制、旧订单前端声明和部署前完整静态产物位于 `/opt/sechelper-auth-template/.deploy-backup-orders-enabled-20260914T223934`。恢复该目录中的 `bin/auth-template` 与 `web/dist` 后重启 `order-test.service`；源码回滚时恢复备份的 `main.go` 和订单声明并删除新增的三个 `business_runtime*.go` 文件。
+
+# 自动发现浏览器兼容修复（2026-09-15）
+
+- 原因：Vite 会将 `import.meta.glob` 编译为静态模块表，但前端运行时条件判断错误地把发现表置空，导致即使当前会话拥有 `order:read`，后台也不显示订单入口。
+- 修复：前后台注册器改用可被 Vite 正确替换、且不影响 Node 单元测试的环境判断；重新生成 Web/Admin 静态产物。未修改 API 二进制、数据库、Redis、Nginx 或 systemd。
+- 浏览器验收：刷新已登录的管理端后，左侧显示“业务运营 → 订单查询（示例）”，当前权限包含 `order:read`；后台主页和订单路由资源返回成功。
+
+# 二级菜单与电商订单列表部署（2026-09-15）
+
+- 远程同步后台分组折叠组件、菜单分组模型、订单列表筛选界面和 Frest 风格统计卡片；`make architecture-check`、后台 9 项单元测试和远程 Vite 生产构建通过（50 个模块）。
+- 浏览器验收确认“业务运营”二级分组可展开/收起，当前路由自动展开；“订单查询（示例）”进入后显示订单概览卡片、订单号搜索、状态筛选、刷新按钮和空状态。
+- 仅更新后台静态产物，未修改 API、数据库、Redis、Nginx 或 systemd；回滚备份为 `/opt/sechelper-auth-template/.deploy-backup-admin-secondary-order-20260915T070509`。
+
+# 分组折叠策略优化部署（2026-09-15）
+
+- `业务运营` 改为不可折叠分组标题；业务节点支持递归两级折叠（订单 → 订单1 → 订单2）；其他分组默认继续保留折叠能力。
+- 远程 `make architecture-check`、管理后台 6 项测试和 Vite 生产构建通过（50 个模块）；后台静态目录已更新，`order-test.service` active，`/admin/` 返回 HTTP 200。
+- 回滚备份：`/opt/sechelper-auth-template/.deploy-backup-admin-collapse-config-20260915T071831`；未修改数据库、Redis、API 二进制、Nginx 或 systemd。
+
+# 管理界面底色与边界阴影远程部署（2026-09-15 08:58 Asia/Shanghai）
+
+- 目标：`root@47.116.4.57:/opt/sechelper-auth-template`，测试域名 `order-test.sechelper.com`。
+- 范围：仅同步获准的 `web/admin/src/style.css` 并重新生成 Admin 静态资源。原有颜色令牌及配色不变；页面根层、应用壳、主内容区保持既有页面底色；侧边栏右边界和顶部栏下边界增加低强度中性阴影。
+- 验证：远程架构检查通过；Admin 测试 6 项通过；Vite 7.1.7 构建转换 51 个模块并成功。`order-test.service` 为 active，`/admin/`、`/healthz`、`/readyz` 均返回 HTTP 200。
+- 运行影响：仅更新后台静态产物；API、PostgreSQL、Redis、Nginx、systemd、运行配置和业务数据均未修改；未重启服务或 reload Nginx。部署源为获准的本地工作树单文件，未在远端执行 Git 操作。
+- 回滚：原样式与完整部署前静态目录位于 `/opt/sechelper-auth-template/.deploy-backup-global-layout-shadows-20260915T085632`。
+
+# 后台嵌套菜单白屏修复部署（2026-09-15）
+
+- 原因：订单模块切换为递归 `children` 导航后，远端仍使用旧的平面导航校验器，启动时抛出 `Invalid admin navigation in orders`，导致后台无法渲染。
+- 修复：同步递归导航校验器及菜单渲染代码，远程架构检查、后台 6 项测试和 Vite 生产构建通过（50 个模块）；后台静态产物已更新。
+- 浏览器验收：刷新后台后无白屏，显示“业务运营 → 订单 → 订单1 → 订单2”；服务保持 active，未修改 API、数据库、Redis、Nginx 或 systemd。
+- 回滚备份：`/opt/sechelper-auth-template/.deploy-backup-admin-bugfix-20260915T073000`。
+
+# 同级分组不可折叠部署（2026-09-15）
+
+- 同步分组模型：`账号与安全`、`监控与审计`、`业务运营`仅作为同级标题展示；订单内部的 `订单`、`订单1`继续支持折叠，`订单2`为页面入口。
+- 远程架构检查、管理后台 6 项测试和 Vite 生产构建通过（50 个模块）；`order-test.service` active，`/admin/` 与 `/readyz` 返回 HTTP 200。
+- 回滚备份：`/opt/sechelper-auth-template/.deploy-backup-admin-sibling-static-20260915T072345`；未修改 API、数据库、Redis、Nginx 或 systemd。
+
+# 管理界面底色统一与交界阴影部署（2026-09-15 08:57 Asia/Shanghai）
+
+- 范围：获准的框架文件 `web/admin/src/style.css`。管理端根节点、应用壳、主内容区和 body 统一沿用既有 现有页面背景变量，没有修改主题颜色令牌；固定侧边栏右边缘增加低强度中性投影，sticky 页眉下缘增加低强度分隔阴影。
+- 远程目标：`root@47.116.4.57:/opt/sechelper-auth-template`，域名 `order-test.sechelper.com`。仅同步该 CSS 文件并重建 Admin 静态资源；本次使用当前获准工作树样式文件，未在本地运行构建，也未在远端使用 Git。
+- 验证：远程 `make architecture-check`、Admin 测试通过（6 项）、Vite 生产构建通过（51 modules）；`order-test.service` 保持 active；`/admin/`、`/healthz`、`/readyz` 返回 HTTP 200。
+- 未修改：API 二进制、PostgreSQL、Redis、Nginx 配置、systemd、运行配置和业务数据；无服务重启或 Nginx reload。
+- 回滚：部署前后台静态产物备份位于 `/opt/sechelper-auth-template/.deploy-backup-global-layout-shadows-20260915T085632/web/dist`；原 CSS 位于同目录 `web/admin/src/style.css`。
+
+# 页眉主内容交界阴影复修部署（2026-09-15 09:20 Asia/Shanghai）
+
+- 原因：浏览器计算样式和远端源码确认仍引用旧页眉样式（`--frest-menu-bg` 与低强度 box-shadow），此前版本未正确进入当前线上静态 bundle。
+- 修复：同步获准的 `web/admin/src/style.css`；页眉和主内容统一使用既有 现有页面背景变量，页眉交界 `box-shadow: none`。颜色令牌未变。
+- 验证：远程架构检查、Admin 测试 6 项、Vite 生产构建（51 modules）通过；服务 active，`/admin/` 与 `/readyz` 返回 HTTP 200。浏览器刷新后页眉和主内容计算背景均为 `rgb(245, 245, 249)`，页眉阴影为 `none`。
+- 未修改：API、数据库、Redis、Nginx、systemd、运行配置和业务数据；无服务重启或 Nginx reload。
+- 回滚：部署前样式与静态目录备份位于 `/opt/sechelper-auth-template/.deploy-backup-header-seam-fix-20260915T092011`。
+
+# 业务运营分组临时置于监控审计之前（2026-09-15 09:04 Asia/Shanghai）
+
+- 范围：获准框架文件 `web/admin/src/app/AdminApp.jsx`。组合导航数组时将业务模块导航直接插入 `监控与审计` 分组起始位置，即 `账号与安全 → 业务运营 → 监控与审计`；未增加通用自定义排序字段或排序机制。
+- 远程目标：`root@47.116.4.57:/opt/sechelper-auth-template`，测试域名 `order-test.sechelper.com`。仅同步获准的 AdminApp 源码并重建后台静态资源；以当前获准工作树文件部署，本次未执行本地构建或 Git 操作。
+- 验证：远程架构检查通过；Admin 测试 6 项通过；Vite 7.1.7 构建转换 51 个模块成功。`order-test.service` active，`/admin/` 和 `/readyz` 返回 HTTP 200。
+- 未修改：API、数据库、Redis、Nginx、systemd、运行配置及业务数据；未重启服务或 reload Nginx。
+- 回滚：部署前 AdminApp 文件和完整后台静态目录备份位于 `/opt/sechelper-auth-template/.deploy-backup-business-before-monitor-20260915T090423/web/`。
+
+# 侧边栏底部折叠与悬停展开部署（2026-09-15）
+
+- 折叠按钮移至侧边栏底部；收起状态宽度为 80px，鼠标移入自动展开至 260px，鼠标移出自动恢复收起，主内容区边距同步调整。
+- 远程架构检查、管理后台 6 项测试和 Vite 生产构建通过（50 个模块）；浏览器实测底部按钮、悬停展开和移出隐藏均正常。
+- 未修改 API、数据库、Redis、Nginx 或 systemd。回滚备份：`/opt/sechelper-auth-template/.deploy-backup-sidebar-hover-20260915T072852`。
+
+# 框架注册与生产产物隔离验证（2026-09-15）
+
+- 验证方式：将当前工作树中排除 `.git/`、根目录 `.env*`、`config.yaml`、`node_modules`、缓存、构建产物及 macOS `._*` 元数据的源码快照传至测试主机临时目录；Go 缓存、编译二进制和前端 `dist` 均在临时目录中。验证进程退出时由钩子清理临时目录；未更新 `/opt/sechelper-auth-template`，未部署或重启 `order-test.service`，未连接或操作数据库、Redis、Nginx及业务数据。
+- 后端：Go 默认模式和 `-tags=example` 全量测试均通过；默认服务/迁移器和 `example` 服务/迁移器均成功编译。Go 测试与 `example` 案例测试代码不进入默认服务构建。
+- 前端：Web 测试 5 项、Admin 测试 15 项通过。Admin Vite production 构建为 50 个模块，产物未含 `/admin/component-reference` 或 `/admin/orders`；test 构建为 55 个模块，含两个测试/案例路由；development 构建为 52 个模块，不含组件参考路由。Web production 构建为 37 个模块。
+- 结果：生产与非生产共用构建入口、配置载入代码和 API/迁移程序入口；由构建模式和 Go build constraints 排除测试/案例模块。未构建容器镜像，未执行 Compose 生命周期操作。
+- 提示：`npm ci --no-audit --no-fund` 提示锁定的 `esbuild@0.25.12` 安装脚本尚未列入 `allowScripts`；构建成功。本次未修改依赖或锁文件。
+- 架构检查：修正 `deploy/scripts/check-boundaries.sh`，改为扫描存在的 `web/admin/src/app`，排除测试夹具，并在扫描路径缺失或 ripgrep 发生扫描错误时明确失败。修正后 `make architecture-check` 与 `git diff --check` 均通过；框架反向依赖业务、业务绕过基础设施及默认宿主引用订单案例均无命中。
+- OpenAPI：测试机 npm registry 探测返回 HTTP 200，但临时快照中的 `npx --package=@redocly/cli@1.34.0` 在 180 秒限定时间内未完成，合同 lint 未验证。临时源文件与 npm 缓存目录已清理；未修改依赖、检查脚本或正式环境。
+
+# 平台总览页面远程部署（2026-09-15 22:08 Asia/Shanghai）
+
+- 目标：`root@47.116.4.57:/opt/sechelper-auth-template`，测试域名 `order-test.sechelper.com`。
+- 范围：仅同步 `web/admin/src/modules/dashboard/DashboardPage.jsx` 与 `web/admin/src/style.css`，远程执行 Admin 测试及 Vite production 构建，并更新 `/opt/sechelper-auth-template/web/dist/admin`。
+- 验证：Admin 测试 15 项通过；Vite 7.1.7 production 构建转换 50 个模块成功；后台 JS/CSS、`/admin/`、`/healthz`、`/readyz` 返回 HTTP 200，`order-test.service` 保持 active；未认证访问 `/v1/admin/dashboard/overview` 返回预期 HTTP 401。远程 `make architecture-check` 未完成：主机缺少 `rg`，退出码 127；这是扫描工具缺失，不能据此判定边界检查通过或发现违规。
+- 未修改：API 二进制、PostgreSQL、Redis、Nginx、systemd、运行配置及业务数据；未重启服务或 reload Nginx。
+- 回滚：远端原始两份源码及完整后台静态产物备份位于 `/opt/sechelper-auth-template/.deploy-backup-dashboard-overview-20260915T221000/`；替换前原静态目录另保留于 `/opt/sechelper-auth-template/web/dist/.admin-previous-dashboard-overview-20260915T221000`。

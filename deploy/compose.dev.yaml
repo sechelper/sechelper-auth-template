@@ -1,13 +1,9 @@
 services:
   api:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.api
-    command: ["/app/auth-template", "--config", "/app/config.yaml"]
+    image: sechelper-auth-template-api:${RELEASE_VERSION:?release version required}-${BUILD_ID:?Build ID required}-development
+    command: ["--config", "/app/config.yaml"]
     environment:
-      APP_ENV: development
-      APP_VERSION: dev
-      APP_CONFIG_FILE: /app/config.yaml
+      APP_ENV: ${DEPLOYMENT_ENVIRONMENT:?select a deployment environment}
       LISTEN_ADDR: 0.0.0.0:8080
       DATABASE_HOST: postgres
       DATABASE_PASSWORD: change-me
@@ -34,13 +30,12 @@ services:
         condition: service_healthy
 
   migrate:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.api
-    command: ["/app/auth-template-migrate", "--config", "/app/config.yaml"]
+    image: sechelper-auth-template-api:${RELEASE_VERSION:?release version required}-${BUILD_ID:?Build ID required}-development
+    entrypoint: ["/app/auth-template-migrate"]
+    command: ["--config", "/app/config.yaml"]
     environment:
-      APP_ENV: development
-      APP_CONFIG_FILE: /app/config.yaml
+      APP_ENV: ${DEPLOYMENT_ENVIRONMENT:?select a deployment environment}
+      INCLUDE_EXAMPLE_MIGRATIONS: ${INCLUDE_EXAMPLE_MIGRATIONS:-0}
       DATABASE_HOST: postgres
       DATABASE_PASSWORD: change-me
     volumes:
@@ -50,18 +45,14 @@ services:
         condition: service_healthy
 
   web:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.web
+    image: sechelper-auth-template-web:${RELEASE_VERSION:?release version required}-${BUILD_ID:?Build ID required}-development
     ports:
       - "127.0.0.1:8088:80"
     depends_on:
       - api
 
   mock-idp:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.mock-idp
+    image: sechelper-auth-template-mock-idp:development
     environment:
       MOCK_IDP_APPLICATION_CODE: local-app
     expose:

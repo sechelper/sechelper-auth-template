@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"sechelper-auth-template/api/internal/modules/account/application"
 	accounthttp "sechelper-auth-template/api/internal/modules/account/transport/http"
-	auditapplication "sechelper-auth-template/api/internal/modules/audit/application"
+	plataudit "sechelper-auth-template/api/internal/platform/audit"
 	"sechelper-auth-template/api/internal/platform/session"
 )
 
@@ -17,7 +17,7 @@ func New(sessions session.Store) *Module {
 	service := application.NewService(sessions)
 	return &Module{Service: service, Handler: accounthttp.NewHandler(service)}
 }
-func (m *Module) SetAuditRecorder(recorder auditapplication.Recorder) {
+func (m *Module) SetAuditRecorder(recorder plataudit.Recorder) {
 	m.Service.SetAuditRecorder(recorder)
 }
 func (m *Module) RegisterRoutes(v1 *gin.RouterGroup, readAuth, revokeAuth gin.HandlerFunc) {

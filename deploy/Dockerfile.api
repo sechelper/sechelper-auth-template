@@ -1,15 +1,53 @@
 FROM golang:1.26.8 AS build
 WORKDIR /src
+ARG BUILD_ENV=production
+ARG RELEASE_VERSION
+ARG BUILD_ID
+ARG SOURCE_REVISION
+ARG CANONICAL_BUILD
+RUN test "$CANONICAL_BUILD" = 1 || { echo 'build images through the canonical make build entry point' >&2; exit 2; }
 COPY api/go.mod api/go.sum* ./api/
 RUN cd api && go mod download
 COPY api ./api
-RUN cd api && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/auth-template ./cmd/server
-RUN cd api && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/auth-template-migrate ./cmd/migrate
+RUN BUILD_PROFILE="$(printf '%s' "$BUILD_ENV" | tr '[:upper:]' '[:lower:]')" \
+ && case "$BUILD_PROFILE" in development|test|production) ;; *) echo "unsupported BUILD_ENV: $BUILD_ENV" >&2; exit 2 ;; esac \
+ && printf '%s\n' "$RELEASE_VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$' \
+ && if [ "$BUILD_PROFILE" = development ]; then test "$BUILD_ID" = dev-local || printf '%s' "$BUILD_ID" | grep -Eq '^[0-9]{14}$'; else printf '%s' "$BUILD_ID" | grep -Eq '^[0-9]{14}$' && printf '%s' "$SOURCE_REVISION" | grep -Eq '^[0-9a-f]{40}$'; fi \
+ && if [ "$BUILD_PROFILE" = production ]; then TAGS=""; else TAGS="-tags=example"; fi \
+ && cd api && CGO_ENABLED=0 go build $TAGS -trimpath -ldflags="-s -w -X main.releaseVersion=$RELEASE_VERSION -X main.buildID=$BUILD_ID -X main.buildRevision=$SOURCE_REVISION -X main.buildEnvironment=$BUILD_PROFILE" -o /out/auth-template ./cmd/server \
+ && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.buildEnvironment=$BUILD_PROFILE" -o /out/auth-template-migrate ./cmd/migrate \
+ && mkdir -p /out/migrations \
+ && cp migrations/*.sql /out/migrations/ \
+ && if [ -d migrations/business ]; then \
+      mkdir -p /out/migrations/business; \
+      for module_dir in migrations/business/*; do \
+        [ -d "$module_dir" ] || continue; \
+        kind=production; \
+        if [ -f "$module_dir/MODULE_KIND" ]; then kind="$(tr -d '\r\n' < "$module_dir/MODULE_KIND")"; fi; \
+        case "$kind" in production|example) ;; *) echo "unsupported migration module kind: $module_dir" >&2; exit 2 ;; esac; \
+        if [ "$BUILD_PROFILE" = production ] && [ "$kind" = example ]; then continue; fi; \
+        target="/out/migrations/business/$(basename "$module_dir")"; \
+        mkdir -p "$target"; \
+        if [ -f "$module_dir/MODULE_KIND" ]; then cp "$module_dir/MODULE_KIND" "$target/MODULE_KIND"; fi; \
+        for migration in "$module_dir"/*.sql; do [ -f "$migration" ] && cp "$migration" "$target/"; done; \
+      done; \
+    fi \
+ && if [ "$BUILD_PROFILE" = production ] && [ -d /out/migrations/business ]; then \
+      if find /out/migrations/business -name MODULE_KIND -type f -exec grep -l -x example {} + | grep -q .; then echo 'example migrations leaked into production image' >&2; exit 1; fi; \
+    fi
 
 FROM gcr.io/distroless/base-debian12
+ARG RELEASE_VERSION
+ARG BUILD_ID
+ARG SOURCE_REVISION
+ARG BUILD_ENV=production
+LABEL org.opencontainers.image.version="$RELEASE_VERSION" \
+      org.opencontainers.image.revision="$SOURCE_REVISION" \
+      io.sechelper.application.build-id="$BUILD_ID" \
+      io.sechelper.application.environment="$BUILD_ENV"
 COPY --from=build /out/auth-template /app/auth-template
 COPY --from=build /out/auth-template-migrate /app/auth-template-migrate
-COPY api/migrations /app/migrations
+COPY --from=build /out/migrations /app/migrations
 USER nonroot:nonroot
 WORKDIR /app
 ENTRYPOINT ["/app/auth-template"]

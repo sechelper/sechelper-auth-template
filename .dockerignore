@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+config.yaml
 web/node_modules
 web/dist
 api/bin

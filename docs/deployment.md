@@ -13,19 +13,31 @@
 ## 本地
 
 ```bash
-cp config.example.yaml config.yaml
-cp .env.example .env
-docker compose -f deploy/compose.dev.yaml up -d postgres
-cd api
-APP_CONFIG_FILE=../config.yaml go run ./cmd/server
-cd web && npm install && npm run dev
+make toolchain-check
+make build ENV=development
+make run ENV=development
 ```
+
+开发环境 Compose 使用 `deploy/config.dev.yaml` 和 `deploy/environments/development.env`。数据库结构由独立迁移命令管理，API 进程不会在启动时执行 DDL。`make run ENV=development ACTION=migrate` 执行迁移；`make run ENV=development` 启动应用栈。
+
+## 版本与工具链
+
+根目录 `release.yaml` 是应用版本和发布 Build ID 的唯一权威来源。`releaseVersion` 使用 SemVer；`releaseBuildId` 使用 UTC `YYYYMMDDHHmmss`。开始一个新发布时运行 `make release-id` 分配并写入新的 Build ID；该命令串行分配 ID，开发构建不会改写发布值。更改 `releaseVersion` 后运行 `make release-sync`，将前台和后台 npm 包清单/锁文件中的必需版本字段同步到权威版本。`make release-check` 校验 YAML 字段、格式和同步结果。
+
+OpenAPI 文件中的 `info.version` 表示 API 合同版本，独立于运行时应用版本。
+
+`toolchain.versions` 是精确工具链清单：Go 1.26.8、Node.js 24.21.0、npm 11.19.1、React/react-dom 19.2.7、Vite 7.1.7。`api/go.mod` 的 `go` 指令定义最低 Go 语言/模块版本；`toolchain.versions` 单独固定实际编译器版本，若 `go.mod` 有 `toolchain` 指令，检查器也会校验它。`.node-version`、npm 包 `engines`/`packageManager`、CI 与 Docker 构建阶段由 `make toolchain-check` 检查。CI 和 Docker 安装依赖前验证并固定 npm 版本；前端使用提交的 `package-lock.json` 和 `npm ci`。
+
+唯一构建入口是 `make build ENV=<development|test|production> [COMPONENT=all|api|web]`，运行入口是 `make run ENV=<development|test|production>`。入口解析应用版本、Build ID 和源代码修订号一次，再将相同值传给 API、前台和后台构建。development 使用 `dev-local` Build ID；test/production 必须使用 `release.yaml` 中的 Build ID、干净的已提交源码和有效版本，不能用 Git SHA 或时间戳替代应用版本/Build ID。`release.yaml` 的 Build ID 必须随发布源码提交，test 与 production 构建同一发布时使用相同 ID。
+
+构建产物包括 API/迁移 Docker 镜像、含前台和后台静态资源的 Web 镜像，以及写入两个静态目录的 `build-info.json`。镜像标签使用 `<releaseVersion>-<releaseBuildId>-<environment>`，容器 OCI 标签记录应用版本、Build ID、源码修订号和环境；Go `/v1/version` 与后台运行信息也返回版本、Build ID 和源码修订号。构建成功后，入口在操作系统临时目录写入 artifact manifest，列出每个组件、镜像引用和共同构建元数据；CI 会上传 test/production 两份 manifest。部署使用的 `config.yaml`、密钥、日志和数据库状态仍由运行环境管理，不进入镜像构建上下文中的配置挂载。
+
+构建和依赖安装的工作目录不写入仓库。Go 测试缓存、临时文件和 artifact manifest 放在操作系统临时目录；Docker 镜像本身由 Docker 管理。应用运行配置由 Compose 显式挂载的 `config.yaml` 路径选择，日志与运行状态遵循该配置和容器可写层约定。
 
 数据库结构由独立迁移命令管理，API 进程不会在启动时执行 DDL。首次运行或发布新版本前执行：
 
 ```bash
-cd api
-APP_CONFIG_FILE=../config.yaml go run ./cmd/migrate
+make run ENV=production ACTION=migrate
 ```
 
 生产容器中对应的可执行文件为 `/app/auth-template-migrate`；迁移完成后再启动 API。迁移会记录 SQL 文件 checksum，已执行迁移被修改时会失败，必须新增前向迁移文件。

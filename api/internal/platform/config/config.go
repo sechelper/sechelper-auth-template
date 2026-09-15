@@ -25,7 +25,7 @@ type Config struct {
 	Security  SecurityConfig  `mapstructure:"security"`
 	Log       LogConfig       `mapstructure:"log"`
 }
-type AppConfig struct{ Name, Environment, Version, ListenAddr, PublicWebOrigin, APIOrigin, PrimaryDomain, TestDomainSuffix, RedisURL string }
+type AppConfig struct{ Name, Environment, ListenAddr, PublicWebOrigin, APIOrigin, PrimaryDomain, TestDomainSuffix, RedisURL string }
 type ServerConfig struct {
 	Host, Address                                           string
 	Port                                                    int
@@ -127,7 +127,7 @@ func resolvePath(args []string) (string, bool, error) {
 }
 func envBindings() map[string]string {
 	return map[string]string{
-		"app.environment": "APP_ENV", "app.version": "APP_VERSION", "app.listenAddr": "LISTEN_ADDR", "app.publicWebOrigin": "PUBLIC_WEB_ORIGIN", "app.apiOrigin": "API_ORIGIN", "app.primaryDomain": "PRIMARY_DOMAIN", "app.testDomainSuffix": "TEST_DOMAIN_SUFFIX", "app.redisUrl": "REDIS_URL",
+		"app.environment": "APP_ENV", "app.listenAddr": "LISTEN_ADDR", "app.publicWebOrigin": "PUBLIC_WEB_ORIGIN", "app.apiOrigin": "API_ORIGIN", "app.primaryDomain": "PRIMARY_DOMAIN", "app.testDomainSuffix": "TEST_DOMAIN_SUFFIX", "app.redisUrl": "REDIS_URL",
 		"server.host": "SERVER_HOST", "server.port": "SERVER_PORT", "server.address": "LISTEN_ADDR", "server.readTimeout": "SERVER_READ_TIMEOUT", "server.writeTimeout": "SERVER_WRITE_TIMEOUT", "server.idleTimeout": "SERVER_IDLE_TIMEOUT", "server.shutdownTimeout": "SERVER_SHUTDOWN_TIMEOUT",
 		"database.driver": "DATABASE_DRIVER", "database.host": "DATABASE_HOST", "database.port": "DATABASE_PORT", "database.name": "DATABASE_NAME", "database.user": "DATABASE_USER", "database.password": "DATABASE_PASSWORD", "database.sslMode": "DATABASE_SSL_MODE",
 		"identity.issuer": "IDENTITY_ISSUER", "identity.authorizationEndpoint": "IDENTITY_AUTHORIZATION_ENDPOINT", "identity.tokenEndpoint": "IDENTITY_TOKEN_ENDPOINT", "identity.userinfoEndpoint": "IDENTITY_USERINFO_ENDPOINT", "identity.jwksUrl": "IDENTITY_JWKS_URL", "identity.revocationEndpoint": "IDENTITY_REVOCATION_ENDPOINT", "identity.endSessionEndpoint": "IDENTITY_END_SESSION_ENDPOINT", "identity.audience": "IDENTITY_AUDIENCE", "identity.clientId": "IDENTITY_CLIENT_ID", "identity.clientSecret": "IDENTITY_CLIENT_SECRET", "identity.redirectUri": "IDENTITY_REDIRECT_URI", "identity.applicationCode": "IDENTITY_APPLICATION_CODE", "identity.scopes": "IDENTITY_SCOPES",
@@ -136,7 +136,7 @@ func envBindings() map[string]string {
 	}
 }
 func setDefaults(v *viper.Viper) {
-	for key, value := range map[string]any{"app.name": "auth-template", "app.environment": "development", "app.version": "dev", "app.testDomainSuffix": "-test", "server.host": "127.0.0.1", "server.port": 8080, "server.readTimeout": "10s", "server.writeTimeout": "15s", "server.idleTimeout": "60s", "server.shutdownTimeout": "15s", "database.driver": "postgres", "database.port": 5432, "database.sslMode": "disable", "identity.scopes": []string{"openid", "profile", "email"}, "manifest.syncInterval": "10m", "session.cookieName": "auth_template_session", "session.ttl": "8h", "session.secure": false, "session.sameSite": "Lax", "log.mode": "file", "log.encoding": "json", "log.level": "info", "log.output": "logs/app.log", "log.timeKey": "ts", "log.levelKey": "level", "log.messageKey": "msg", "log.callerKey": "caller", "log.stacktraceKey": "stacktrace", "log.timeEncoding": "iso8601", "log.levelEncoding": "lowercase", "log.development": false, "log.disableCaller": false, "log.disableStacktrace": true, "log.sampling": false, "log.retentionDays": 180, "log.maxSizeMB": 100, "log.maxBackups": 10, "log.maxAgeDays": 180, "log.compress": true, "log.debug": false} {
+	for key, value := range map[string]any{"app.name": "auth-template", "app.environment": "development", "app.testDomainSuffix": "-test", "server.host": "127.0.0.1", "server.port": 8080, "server.readTimeout": "10s", "server.writeTimeout": "15s", "server.idleTimeout": "60s", "server.shutdownTimeout": "15s", "database.driver": "postgres", "database.port": 5432, "database.sslMode": "disable", "identity.scopes": []string{"openid", "profile", "email"}, "manifest.syncInterval": "10m", "session.cookieName": "auth_template_session", "session.ttl": "8h", "session.secure": false, "session.sameSite": "Lax", "log.mode": "file", "log.encoding": "json", "log.level": "info", "log.output": "logs/app.log", "log.timeKey": "ts", "log.levelKey": "level", "log.messageKey": "msg", "log.callerKey": "caller", "log.stacktraceKey": "stacktrace", "log.timeEncoding": "iso8601", "log.levelEncoding": "lowercase", "log.development": false, "log.disableCaller": false, "log.disableStacktrace": true, "log.sampling": false, "log.retentionDays": 180, "log.maxSizeMB": 100, "log.maxBackups": 10, "log.maxAgeDays": 180, "log.compress": true, "log.debug": false} {
 		v.SetDefault(key, value)
 	}
 	v.SetDefault("rateLimit.loginPerMinute", 10)

@@ -69,7 +69,7 @@ function appendResourceSnapshot(history, snapshot) {
 }
 
 function ResourceTrend({ label, points, maximum = 100, color, fullWidth = false }) {
-  const width = 260;
+  const width = 1000;
   const height = 42;
   const inset = 4;
   const plotWidth = width - inset * 2;
@@ -224,34 +224,33 @@ export function DashboardPage() {
   const resources = resourceData || data.resources || {};
   const dependencies = dependencyOrder.map((name) => [name, data.dependencies?.[name] || { status: "unknown" }]);
   const unhealthy = dependencies.some(([, value]) => !["healthy", "not_configured"].includes(value.status));
-  const healthyCount = dependencies.filter(([, value]) => value.status === "healthy").length;
   const manifestReady = ["consistent", "applied"].includes(manifest.status);
 
   return <div className="platform-overview-page">
     <PageHeader code="PLATFORM OVERVIEW" title="平台总览" description="查看应用健康、依赖服务、服务器资源与授权同步情况。" />
 
-    <section className="platform-app-banner card" aria-label="应用信息与整体状态">
-      <div className="platform-app-copy">
-        <span className="eyebrow">APPLICATION</span>
-        <h2>{app.name || "—"}</h2>
-        <p>{app.environment || "—"} 环境 · 当前版本 {app.version || "—"} · Build ID <code>{app.buildId || "—"}</code></p>
+    <section className="platform-app-banner card" aria-label="应用信息、系统状态与依赖服务" style={{ display: "block" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "2rem", flexWrap: "wrap" }}>
+        <div className="platform-app-copy">
+          <span className="eyebrow">APPLICATION</span>
+          <h2>{app.name || "—"}</h2>
+          <p>{app.environment || "—"} 环境 · 当前版本 {app.version || "—"} · Build ID <code>{app.buildId || "—"}</code></p>
+        </div>
+        <div className={`platform-app-state ${unhealthy ? "warning" : ""}`} role="status">
+          <span className="health-dot" />{unhealthy ? "系统需关注" : "系统运行正常"}
+        </div>
       </div>
-      <div className={`platform-app-state ${unhealthy ? "warning" : ""}`} role="status">
-        <span className="health-dot" />{unhealthy ? "系统需关注" : "系统运行正常"}
-      </div>
-    </section>
-
-    <section className="card platform-system-card" aria-labelledby="platform-system-title">
-      <div className="platform-section-heading">
-        <div><span className="eyebrow">SYSTEM STATUS</span><h2 id="platform-system-title">系统状态与依赖服务</h2></div>
-        <span className={`platform-dependency-count ${unhealthy ? "warning" : ""}`}>{healthyCount}/{dependencies.length} 项正常</span>
-      </div>
-      <div className="platform-system-facts">
-        <div><span>运行时长</span><strong>{formatUptime(app.startedAt)}</strong></div>
-        <div><span>最近检查</span><strong>{formatDateTime(checkedAt)}</strong></div>
-      </div>
-      <div className="platform-dependency-grid">
-        {dependencies.map(([name, value]) => <HealthCard key={name} name={name} value={value} />)}
+      <div style={{ marginTop: "1.5rem", paddingTop: "1.25rem", borderTop: "1px solid var(--sneat-border)" }}>
+        <div className="platform-section-heading">
+          <div><span className="eyebrow">SYSTEM STATUS</span><h2 id="platform-system-title">系统状态与依赖服务</h2></div>
+        </div>
+        <div className="platform-system-facts">
+          <div><span>运行时长</span><strong>{formatUptime(app.startedAt)}</strong></div>
+          <div><span>最近检查</span><strong>{formatDateTime(checkedAt)}</strong></div>
+        </div>
+        <div className="platform-dependency-grid">
+          {dependencies.map(([name, value]) => <HealthCard key={name} name={name} value={value} />)}
+        </div>
       </div>
     </section>
 
@@ -268,11 +267,11 @@ export function DashboardPage() {
         <div className="platform-resource-rows">
           <div className="platform-resource-row">
             <span className="platform-resource-icon">▤</span>
-            <div className="platform-resource-row-main"><span>磁盘使用率 · 项目所在盘</span><strong>{formatPercent(resources.diskPercent)}</strong><div className="platform-resource-track"><span style={{ width: `${boundedPercent(resources.diskPercent) ?? 0}%`, backgroundColor: "var(--sneat-primary)", transition: "width 450ms ease" }} /></div><ResourceTrend label="磁盘使用率" points={resourceHistory.disk} color="var(--sneat-primary)" fullWidth /><small>{resources.diskUsedBytes != null && resources.diskTotalBytes != null ? `${formatBytes(resources.diskUsedBytes)} / ${formatBytes(resources.diskTotalBytes)}` : "磁盘数据暂不可用"}</small></div>
+            <div className="platform-resource-row-main"><span>磁盘使用率</span><strong>{formatPercent(resources.diskPercent)}</strong><ResourceTrend label="磁盘使用率" points={resourceHistory.disk} color="var(--sneat-primary)" fullWidth /><small>项目所在盘 · {resources.diskUsedBytes != null && resources.diskTotalBytes != null ? `${formatBytes(resources.diskUsedBytes)} / ${formatBytes(resources.diskTotalBytes)}` : "数据暂不可用"}</small></div>
           </div>
           <div className="platform-resource-row">
             <span className="platform-resource-icon green">Go</span>
-            <div className="platform-resource-row-main"><span>Goroutines · Go 进程</span><strong>{Number.isInteger(resources.goroutines) ? resources.goroutines.toLocaleString("zh-CN") : "—"}</strong><ResourceTrend label="Goroutines" points={resourceHistory.goroutines} maximum={null} color="var(--sneat-success)" fullWidth /><small>{resources.sampledAt ? "当前 Go 进程数量" : "等待资源采样"}</small></div>
+            <div className="platform-resource-row-main"><span>Goroutines</span><strong>{Number.isInteger(resources.goroutines) ? resources.goroutines.toLocaleString("zh-CN") : "—"}</strong><ResourceTrend label="Goroutines" points={resourceHistory.goroutines} maximum={null} color="var(--sneat-success)" fullWidth /><small>{resources.sampledAt ? "Go 进程协程数" : "等待资源采样"}</small></div>
           </div>
         </div>
       </section>

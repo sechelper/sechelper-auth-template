@@ -462,16 +462,16 @@ tbody tr:hover { background: rgba(105,108,255,.035); }
 .platform-gauge-label { fill: var(--platform-gauge-label); font-size: 10px; text-anchor: middle; }
 .platform-gauge-value { fill: var(--sneat-heading); font-size: 22px; font-weight: 700; text-anchor: middle; }
 .platform-gauge-note { fill: var(--sneat-muted); font-size: 9px; text-anchor: middle; }
-.platform-resource-rows { display: grid; gap: .8rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--sneat-border); }
-.platform-resource-row { display: grid; grid-template-columns: 2.5rem minmax(0,1fr); align-items: center; gap: .7rem; }
-.platform-resource-icon { display: grid; width: 2.35rem; height: 2.35rem; place-items: center; border: 1px solid var(--platform-resource-icon-border); border-radius: 50%; color: var(--platform-resource-icon-text); background: var(--platform-resource-icon-bg); font-size: .85rem; font-weight: 700; }
+.platform-resource-rows { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--sneat-border); }
+.platform-resource-row { display: grid; grid-template-columns: 1.75rem minmax(0,1fr); align-items: start; gap: .65rem; min-width: 0; padding: .85rem; border: 1px solid var(--sneat-border); border-radius: var(--sneat-radius); background: var(--sneat-body-bg); }
+.platform-resource-icon { display: grid; width: 1.65rem; height: 1.65rem; place-items: center; border: 1px solid var(--platform-resource-icon-border); border-radius: 50%; color: var(--platform-resource-icon-text); background: var(--platform-resource-icon-bg); font-size: .72rem; font-weight: 700; }
 .platform-resource-icon.green { border-color: var(--platform-resource-icon-green-border); color: var(--platform-resource-icon-green-text); background: var(--platform-resource-icon-green-bg); font-size: .68rem; }
-.platform-resource-row-main { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: .3rem .75rem; }
+.platform-resource-row-main { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: .35rem .75rem; min-width: 0; }
 .platform-resource-row-main > span { color: var(--sneat-body); font-size: .75rem; }
 .platform-resource-row-main > strong { color: var(--sneat-heading); font-size: .78rem; font-weight: 600; }
 .platform-resource-track { grid-column: 1 / -1; height: .45rem; overflow: hidden; border-radius: 50rem; background: var(--platform-resource-track); }
 .platform-resource-track span { display: block; width: 0; height: 100%; border-radius: inherit; }
-.platform-resource-row-main small { grid-column: 1 / -1; color: var(--sneat-muted); font-size: .68rem; }
+.platform-resource-row-main small { grid-column: 1 / -1; overflow: hidden; color: var(--sneat-muted); font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
 .platform-overview-page .health-ok { color: var(--platform-status-ok-text) !important; background-color: var(--platform-status-ok-bg) !important; }
 .platform-overview-page .health-warning { color: var(--platform-status-warning-text) !important; background-color: var(--platform-status-warning-bg) !important; }
 .platform-overview-page .decision-result:not(.denied) { color: var(--platform-result-ok-text); background: var(--platform-result-ok-bg); }
@@ -489,3 +489,5 @@ tbody tr:hover { background: rgba(105,108,255,.035); }
 .platform-access-form input, .platform-access-form select { width: 100%; min-width: 0; padding: .55rem .65rem; border: 1px solid var(--sneat-border); border-radius: var(--sneat-radius); color: var(--sneat-heading); background: var(--sneat-paper); font-size: .78rem; }
 .platform-access-form button { min-height: 2.35rem; grid-column: 1 / -1; justify-self: start; padding: .5rem .9rem; border: 0; border-radius: var(--sneat-radius); color: #fff; background: var(--sneat-primary); cursor: pointer; font-size: .78rem; font-weight: 600; }
 .platform-access-form button:disabled { cursor: wait; opacity: .65; }
+@media (max-width: 1199.98px) { .platform-lower-grid { grid-template-columns: minmax(0,1fr); } }
+@media (max-width: 575.98px) { .platform-resource-card, .platform-manifest-access-card { padding: 1rem; } .platform-resource-rows { grid-template-columns: minmax(0,1fr); } .platform-resource-gauges { gap: .5rem; } .platform-resource-gauge { padding: .65rem .4rem .3rem; } }

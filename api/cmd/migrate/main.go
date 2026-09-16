@@ -25,7 +25,11 @@ func main() {
 	if cfg.App.Environment != buildEnvironment {
 		fail(fmt.Errorf("migration binary build environment %q does not match config environment %q", buildEnvironment, cfg.App.Environment))
 	}
-	db, err := sql.Open("pgx", cfg.Database.URL())
+	dsn := cfg.Bootstrap.DatabaseURL
+	if dsn == "" {
+		dsn = cfg.Database.URL()
+	}
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		fail(err)
 	}

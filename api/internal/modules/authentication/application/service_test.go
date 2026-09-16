@@ -13,8 +13,20 @@ import (
 
 type loginIdentity struct{ subject string }
 
-func (f loginIdentity) AuthorizationURL(state, nonce, challenge string) (string, error) {
+func (f loginIdentity) AuthorizationURL(state, nonce, challenge, prompt string) (string, error) {
 	return "https://idp.test/authorize", nil
+}
+func (f loginIdentity) EndSessionURL(idTokenHint, redirectURI, state string) (string, error) {
+	return "https://idp.test/logout", nil
+}
+
+func TestLoginPromptIsBoundToStateSuffix(t *testing.T) {
+	if got := LoginPrompt("random.none"); got != PromptNone {
+		t.Fatalf("LoginPrompt(none) = %q", got)
+	}
+	if got := LoginPrompt("random.login"); got != PromptLogin {
+		t.Fatalf("LoginPrompt(login) = %q", got)
+	}
 }
 func (f loginIdentity) ExchangeCode(context.Context, string, string) (identity.TokenSet, error) {
 	return identity.TokenSet{AccessToken: "access"}, nil
@@ -82,8 +94,11 @@ type rotationIdentity struct {
 	invalidGrant bool
 }
 
-func (f *rotationIdentity) AuthorizationURL(state, nonce, challenge string) (string, error) {
+func (f *rotationIdentity) AuthorizationURL(state, nonce, challenge, prompt string) (string, error) {
 	return "https://idp.test/authorize", nil
+}
+func (f *rotationIdentity) EndSessionURL(idTokenHint, redirectURI, state string) (string, error) {
+	return "https://idp.test/logout", nil
 }
 func (f *rotationIdentity) ExchangeCode(context.Context, string, string) (identity.TokenSet, error) {
 	return identity.TokenSet{}, errors.New("not used in refresh test")
@@ -155,7 +170,7 @@ func TestRefreshRotatesTokenAndExtendsSessionWithoutWaitingForExpiry(t *testing.
 	if _, err := fake.RefreshToken(ctx, oldToken); err == nil {
 		t.Fatal("mock identity provider accepted reuse of the old refresh token")
 	}
-	if err := service.Logout(ctx, "session-1"); err != nil {
+	if _, err := service.Logout(ctx, "session-1", "https://app.example/logout/callback", "logout-state"); err != nil {
 		t.Fatal(err)
 	}
 	if len(fake.revoked) != 1 || fake.revoked[0] != "refresh-token-2" {

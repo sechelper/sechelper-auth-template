@@ -2,6 +2,9 @@ openapi: 3.0.3
 info:
   title: Unified Authentication Business Shell API
   version: 0.1.0
+  license:
+    name: Proprietary
+    url: https://spdx.org/licenses/LicenseRef-Proprietary.html
 servers:
   - url: /
 security: []
@@ -13,6 +16,8 @@ paths:
       responses:
         '200':
           description: Service is alive
+        '500':
+          description: Health handler failed unexpectedly
   /readyz:
     get:
       operationId: readinessCheck
@@ -20,13 +25,26 @@ paths:
       responses:
         '200':
           description: Service is ready
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /v1/auth/login:
     get:
       operationId: startLogin
       summary: Start Confidential Client login
+      parameters:
+        - in: query
+          name: prompt
+          required: false
+          schema: { type: string, enum: [none, login], default: login }
+          description: OIDC prompt mode. `none` attempts silent SSO and falls back to interactive login in the browser.
       responses:
+        # This operation intentionally returns a redirect rather than a 2xx body.
         '302':
           description: Redirect to the identity platform
+        '400':
+          description: The prompt query parameter is invalid
+        '502':
+          description: Identity platform is unavailable
   /v1/auth/callback:
     get:
       operationId: completeLogin
@@ -41,7 +59,8 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        '302': { description: Redirect to the configured web origin }
+        # This operation intentionally returns a redirect rather than a 2xx body.
+        '302': { description: Redirect to the configured web origin or back to interactive login after silent SSO is unavailable }
         '401':
           description: Authentication failed
           content:
@@ -57,6 +76,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SessionResponse' }
+        '500':
+          description: Session status could not be returned
   /v1/version:
     get:
       operationId: getBuildVersion
@@ -67,12 +88,16 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/VersionResponse' }
+        '500':
+          description: Release metadata could not be returned
   /v1/auth/logout:
     post:
       operationId: logout
       summary: Revoke current business session
       responses:
-        '204': { description: Session revoked }
+        '200': { description: 'Local session revoked; an OIDC end-session URL may also be returned.' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { description: Logout state could not be created }
   /v1/auth/refresh:
     post:
       operationId: refreshSession
@@ -87,6 +112,18 @@ paths:
       responses:
         '200': { description: Session refreshed }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/auth/logout/callback:
+    get:
+      operationId: completeLogout
+      summary: Validate the OIDC logout callback
+      parameters:
+        - in: query
+          name: state
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Logout callback accepted }
         '403': { $ref: '#/components/responses/Forbidden' }
   /v1/authorization/me:
     get:

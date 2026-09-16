@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import "./profile-example.css";
+import { oidcAccountURL } from "../../framework/config/runtime.js";
 
 export function ProfileExamplePage({ auth }) {
   const { state, login, logout, refreshSession, refresh } = auth;
   const [pending, setPending] = useState("");
   const [actionError, setActionError] = useState("");
+  const settingsURL = oidcAccountURL();
 
   useEffect(() => {
     document.title = "SECHELPER COMMUNITY · OIDC Profile 示例";
@@ -26,7 +28,11 @@ export function ProfileExamplePage({ auth }) {
     <main className="profile-example">
       <header className="profile-example__header">
         <a className="profile-example__brand" href="/" aria-label="SECHELPER COMMUNITY 示例首页">SECHELPER COMMUNITY · 示例</a>
-        <a className="profile-example__admin" href="/admin/">进入管理后台 <span aria-hidden="true">↗</span></a>
+        <nav className="profile-example__entry-nav" aria-label="用户相关入口">
+          <a href="/">应用首页</a>
+          <a href="/admin/">管理后台 <span aria-hidden="true">↗</span></a>
+          {settingsURL && <a href={settingsURL}>个人设置 <span aria-hidden="true">↗</span></a>}
+        </nav>
       </header>
 
       <section className="profile-example__intro">
@@ -59,6 +65,11 @@ export function ProfileExamplePage({ auth }) {
               <div><dt>Application</dt><dd>{state.applicationCode || "未提供"}</dd></div>
               <div><dt>会话有效期</dt><dd>{state.expiresAt || "未提供"}</dd></div>
             </dl>
+            <div className="profile-example__account-entry">
+              <p className="profile-example__eyebrow">账号管理</p>
+              <p>个人资料、密码、多重验证和登录设备由统一身份中心管理。</p>
+              <a className="profile-example__settings" href={settingsURL}>打开统一身份中心个人设置 <span aria-hidden="true">↗</span></a>
+            </div>
             {state.profile && Object.keys(state.profile).length > 0 ? (
               <pre className="profile-example__json">{JSON.stringify(state.profile, null, 2)}</pre>
             ) : (

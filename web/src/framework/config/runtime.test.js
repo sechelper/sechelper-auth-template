@@ -1,22 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { apiOrigin, identitySettingsURL } from "./runtime.js";
+import { apiOrigin, oidcAccountURL } from "./runtime.js";
 
 test("apiOrigin uses the injected public runtime configuration", () => {
   globalThis.__APP_CONFIG__ = { apiOrigin: "https://api.example.test" };
   assert.equal(apiOrigin(), "https://api.example.test");
 });
 
-test("identity settings URL uses the shared runtime field", () => {
-  globalThis.__APP_CONFIG__ = { identitySettingsUrl: "https://passport.example.test/settings" };
-  assert.equal(identitySettingsURL(), "https://passport.example.test/settings");
-});
-
-test("identity settings URL rejects unsafe values", () => {
-  for (const value of [undefined, "", "http://passport.example.test", "javascript:alert(1)", "https://user:pass@passport.example.test"]) {
-    globalThis.__APP_CONFIG__ = { identitySettingsUrl: value };
-    assert.equal(identitySettingsURL(), "");
-  }
+test("OIDC account URL uses the discovery origin from code", () => {
+  assert.equal(oidcAccountURL(), "https://passport-test.sechelper.com");
 });
 
 test("apiOrigin falls back to the browser origin", () => {

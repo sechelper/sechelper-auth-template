@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,8 +26,14 @@ type LoginState struct {
 	ExpiresAt              time.Time
 }
 
+const (
+	PromptNone  = "none"
+	PromptLogin = "login"
+)
+
 type IdentityProvider interface {
-	AuthorizationURL(state, nonce, challenge string) (string, error)
+	AuthorizationURL(state, nonce, challenge, prompt string) (string, error)
+	EndSessionURL(idTokenHint, redirectURI, state string) (string, error)
 	ExchangeCode(context.Context, string, string) (identity.TokenSet, error)
 	ValidateIDToken(context.Context, string, string) (identity.IDTokenClaims, error)
 	GetUserInfo(context.Context, string) (identity.UserInfo, error)
@@ -58,6 +65,10 @@ type cachedProfile struct {
 	expiresAt time.Time
 }
 
+type LogoutResult struct {
+	EndSessionURL string
+}
+
 func (s *Service) SetAuditRecorder(recorder plataudit.Recorder) { s.auditRecorder = recorder }
 func (s *Service) SetUserResolver(issuer string, resolver UserResolver) {
 	s.identityIssuer, s.userResolver = issuer, resolver
@@ -66,8 +77,11 @@ func (s *Service) SetUserResolver(issuer string, resolver UserResolver) {
 func NewService(client IdentityProvider, sessions session.Store, loginStates session.LoginTransactionStore, protector *session.TokenProtector, ttl time.Duration, applicationCode string) *Service {
 	return &Service{identity: client, sessions: sessions, loginStates: loginStates, protector: protector, ttl: ttl, applicationCode: applicationCode, profiles: make(map[string]cachedProfile)}
 }
-func (s *Service) BeginLogin(ctx context.Context) (string, error) {
-	state, err := randomString(32)
+func (s *Service) BeginLogin(ctx context.Context, prompt string) (string, error) {
+	if prompt != PromptNone && prompt != PromptLogin {
+		return "", errors.New("unsupported login prompt")
+	}
+	randomState, err := randomString(32)
 	if err != nil {
 		return "", err
 	}
@@ -81,10 +95,21 @@ func (s *Service) BeginLogin(ctx context.Context) (string, error) {
 	}
 	sum := sha256.Sum256([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(sum[:])
+	// Keep the prompt bound to the server-validated state without changing the
+	// existing login-transaction schema. The random portion remains the value
+	// protected by the transaction store's hash.
+	state := randomState + "." + prompt
 	if err := s.loginStates.SaveLoginTransaction(ctx, session.LoginTransaction{State: state, Nonce: nonce, Verifier: verifier, ExpiresAt: time.Now().Add(5 * time.Minute)}); err != nil {
 		return "", err
 	}
-	return s.identity.AuthorizationURL(state, nonce, challenge)
+	return s.identity.AuthorizationURL(state, nonce, challenge, prompt)
+}
+
+func LoginPrompt(state string) string {
+	if strings.HasSuffix(state, "."+PromptNone) {
+		return PromptNone
+	}
+	return PromptLogin
 }
 func (s *Service) CompleteLogin(ctx context.Context, state, code string) (result session.Session, resultErr error) {
 	defer func() {
@@ -152,7 +177,17 @@ func (s *Service) CompleteLogin(ctx context.Context, state, code string) (result
 			return session.Session{}, err
 		}
 	}
-	result = session.Session{ID: id, Subject: user.Subject, PlatformUserUUID: platformUserUUID, Email: user.Email, ApplicationCode: auth.ApplicationCode, Permissions: permissions, ProfileClaims: profileClaims(user), RefreshTokenCiphertext: refreshToken, ExpiresAt: time.Now().Add(ttl)}
+	encryptedIDToken := ""
+	if tokens.IDToken != "" {
+		if s.protector == nil {
+			return session.Session{}, errors.New("session token protector is not configured")
+		}
+		encryptedIDToken, err = s.protector.Encrypt(tokens.IDToken)
+		if err != nil {
+			return session.Session{}, err
+		}
+	}
+	result = session.Session{ID: id, Subject: user.Subject, PlatformUserUUID: platformUserUUID, Email: user.Email, ApplicationCode: auth.ApplicationCode, Permissions: permissions, ProfileClaims: profileClaims(user), RefreshTokenCiphertext: refreshToken, IDTokenCiphertext: encryptedIDToken, ExpiresAt: time.Now().Add(ttl)}
 	persisted := result
 	persisted.ProfileClaims = nil
 	if err := s.sessions.Create(ctx, persisted); err != nil {
@@ -257,10 +292,10 @@ func (s *Service) Get(ctx context.Context, id string) (session.Session, error) {
 	value.ProfileClaims = s.loadProfile(id, value.ExpiresAt)
 	return value, nil
 }
-func (s *Service) Logout(ctx context.Context, id string) error {
+func (s *Service) Logout(ctx context.Context, id, redirectURI, state string) (LogoutResult, error) {
 	current, err := s.sessions.Get(ctx, id)
 	if err != nil && !errors.Is(err, session.ErrNotFound) {
-		return err
+		return LogoutResult{}, err
 	}
 	if err == nil && current.RefreshTokenCiphertext != "" {
 		if raw, decryptErr := s.protector.Decrypt(current.RefreshTokenCiphertext); decryptErr == nil {
@@ -270,6 +305,14 @@ func (s *Service) Logout(ctx context.Context, id string) error {
 				s.onRemoteRevoke(revokeErr)
 			}
 		}
+	}
+	logout := LogoutResult{}
+	if err == nil {
+		idToken := ""
+		if current.IDTokenCiphertext != "" && s.protector != nil {
+			idToken, _ = s.protector.Decrypt(current.IDTokenCiphertext)
+		}
+		logout.EndSessionURL, _ = s.identity.EndSessionURL(idToken, redirectURI, state)
 	}
 	err = s.sessions.Revoke(ctx, id)
 	s.profileMu.Lock()
@@ -288,7 +331,7 @@ func (s *Service) Logout(ctx context.Context, id string) error {
 			_ = s.auditRecorder.Record(ctx, plataudit.Event{ID: "evt-" + eventID, EventType: eventType, Outcome: outcome, ActorSubject: subject, ApplicationCode: s.applicationCode, ResourceType: "session", ResourceID: id, Action: "logout", Source: "api"})
 		}
 	}
-	return err
+	return logout, err
 }
 
 func (s *Service) storeProfile(id string, claims map[string]any, expiresAt time.Time) {

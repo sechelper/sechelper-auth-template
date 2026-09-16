@@ -75,7 +75,7 @@ func NewClient(cfg config.IdentityConfig, httpClient *http.Client) *Client {
 	return &Client{cfg: cfg, http: httpClient}
 }
 
-func (c *Client) AuthorizationURL(state, nonce, challenge string) (string, error) {
+func (c *Client) AuthorizationURL(state, nonce, challenge, prompt string) (string, error) {
 	u, err := url.Parse(c.cfg.AuthorizationEndpoint)
 	if err != nil {
 		return "", err
@@ -89,6 +89,22 @@ func (c *Client) AuthorizationURL(state, nonce, challenge string) (string, error
 	q.Set("nonce", nonce)
 	q.Set("code_challenge", challenge)
 	q.Set("code_challenge_method", "S256")
+	q.Set("prompt", prompt)
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
+func (c *Client) EndSessionURL(idTokenHint, redirectURI, state string) (string, error) {
+	u, err := url.Parse(c.cfg.EndSessionEndpoint)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "", errors.New("identity end session endpoint is not configured")
+	}
+	q := u.Query()
+	if idTokenHint != "" {
+		q.Set("id_token_hint", idTokenHint)
+	}
+	q.Set("post_logout_redirect_uri", redirectURI)
+	q.Set("state", state)
 	u.RawQuery = q.Encode()
 	return u.String(), nil
 }

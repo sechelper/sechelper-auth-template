@@ -27,11 +27,17 @@ func (h *Handler) Register(r *gin.RouterGroup) {
 	auth.GET("/login", h.login)
 	auth.GET("/callback", h.callback)
 	auth.GET("/session", h.session)
+	auth.GET("/logout/callback", h.logoutCallback)
 	auth.POST("/refresh", h.refresh)
 	auth.POST("/logout", h.logout)
 }
 func (h *Handler) login(c *gin.Context) {
-	target, err := h.service.BeginLogin(c.Request.Context())
+	prompt := c.DefaultQuery("prompt", application.PromptLogin)
+	if prompt != application.PromptNone && prompt != application.PromptLogin {
+		writeError(c, http.StatusBadRequest, "INVALID_LOGIN_PROMPT")
+		return
+	}
+	target, err := h.service.BeginLogin(c.Request.Context(), prompt)
 	if err != nil {
 		writeError(c, 502, "IDENTITY_DEPENDENCY_FAILED")
 		return
@@ -40,6 +46,10 @@ func (h *Handler) login(c *gin.Context) {
 }
 func (h *Handler) callback(c *gin.Context) {
 	if c.Query("error") != "" {
+		if application.LoginPrompt(c.Query("state")) == application.PromptNone {
+			c.Redirect(http.StatusFound, h.webOrigin+"/?auth=login-required")
+			return
+		}
 		writeError(c, 401, "IDENTITY_LOGIN_FAILED")
 		return
 	}
@@ -70,11 +80,31 @@ func (h *Handler) logout(c *gin.Context) {
 	if !h.validCSRF(c) {
 		return
 	}
+	logoutState, err := session.NewID()
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, "LOGOUT_STATE_FAILED")
+		return
+	}
+	result := application.LogoutResult{}
 	if id := h.cookie(c); id != "" {
-		_ = h.service.Logout(c.Request.Context(), id)
+		result, _ = h.service.Logout(c.Request.Context(), id, h.webOrigin+"/", logoutState)
 	}
 	h.clearCookie(c)
-	c.Status(http.StatusNoContent)
+	if result.EndSessionURL == "" {
+		c.JSON(http.StatusOK, gin.H{"loggedOut": true})
+		return
+	}
+	h.setLogoutStateCookie(c, logoutState)
+	c.JSON(http.StatusOK, gin.H{"loggedOut": true, "logoutUrl": result.EndSessionURL})
+}
+func (h *Handler) logoutCallback(c *gin.Context) {
+	state, _ := c.Cookie("auth_template_logout_state")
+	if state == "" || state != c.Query("state") {
+		writeError(c, http.StatusForbidden, "LOGOUT_STATE_FAILED")
+		return
+	}
+	h.clearLogoutStateCookie(c)
+	c.JSON(http.StatusOK, gin.H{"loggedOut": true})
 }
 func (h *Handler) refresh(c *gin.Context) {
 	if !h.validCSRF(c) {
@@ -146,6 +176,14 @@ func (h *Handler) ensureCSRF(c *gin.Context) {
 		c.SetCookie("auth_template_csrf", value, int(h.cfg.TTL.Seconds()), "/", "", h.cfg.Secure, false)
 	}
 	c.Header("X-CSRF-Token", value)
+}
+func (h *Handler) setLogoutStateCookie(c *gin.Context, value string) {
+	c.SetSameSite(parseSameSite(h.cfg.SameSite))
+	c.SetCookie("auth_template_logout_state", value, 300, "/", "", h.cfg.Secure, true)
+}
+func (h *Handler) clearLogoutStateCookie(c *gin.Context) {
+	c.SetSameSite(parseSameSite(h.cfg.SameSite))
+	c.SetCookie("auth_template_logout_state", "", -1, "/", "", h.cfg.Secure, true)
 }
 func (h *Handler) validCSRF(c *gin.Context) bool {
 	csrf, _ := c.Cookie("auth_template_csrf")

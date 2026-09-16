@@ -14,6 +14,12 @@
 6. 服务端读取 UserInfo 和当前 Application 授权。
 7. 服务端创建会话并返回 HttpOnly Cookie。
 
+前台业务进入时只自动请求本地会话；未登录时显示业务自己的登录按钮，点击后使用 OIDC `prompt=login` 发起交互式登录。已登录时由业务页面正常加载数据，不因首页未登录而自动跳转认证。
+
+`GET /v1/auth/login` 只接受 `prompt=none` 或 `prompt=login`。认证模式绑定在一次性随机 `state` 的服务端事务中，不能由回调请求改写。业务登出后不会自动重新登录；用户再次进入业务时才会触发新的登录检查。
+
+退出登录先撤销本地 Session 和 Refresh Token，再使用 Discovery 返回的 `end_session_endpoint` 发起 OIDC RP-Initiated Logout。登录成功时，ID Token 以 AES-GCM 密文保存在服务端 Session 中，仅用于生成 `id_token_hint`。平台回跳业务首页 `/` 后，前台在首页后台校验 state、清理地址栏参数，不额外渲染退出页面。若平台未登记退出回调地址，平台会直接返回 `logged_out`，本地退出仍然有效，但业务端不会收到回调。
+
 服务端向统一认证平台调用业务 Manifest API 时，复用同一组 Confidential Client 的 `client_id` 与 `client_secret`，通过 Client Credentials Grant 获取短期 access token，并使用 Bearer Token 调用接口；浏览器和本地数据库都不接触该 access token。系统不支持 `manifest_id`、`manifest_secret` 或独立 Manifest 凭据。
 
 回调完成前，服务端必须校验授权码交换返回的 ID Token：签名算法、JWKS `kid`、issuer、以 Client ID 为目标的 audience、有效期、nonce，以及 ID Token、UserInfo 和授权响应中的 subject 一致性。`identity.audience` 是业务 API audience，不用于 ID Token 的 `aud` 校验。JWKS 地址由 `IDENTITY_JWKS_URL` 配置，不能从请求参数提供。

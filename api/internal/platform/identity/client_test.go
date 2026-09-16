@@ -61,7 +61,7 @@ func TestAuthorizationURLRequestsProfileScope(t *testing.T) {
 		RedirectURI:           "https://app.example/callback",
 		Scopes:                []string{"openid", "email"},
 	}, http.DefaultClient)
-	raw, err := c.AuthorizationURL("state", "nonce", "challenge")
+	raw, err := c.AuthorizationURL("state", "nonce", "challenge", "none")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,6 +72,9 @@ func TestAuthorizationURLRequestsProfileScope(t *testing.T) {
 	if parsed.Query().Get("scope") != "openid email profile" {
 		t.Fatalf("authorization scope = %q, want profile included", parsed.Query().Get("scope"))
 	}
+	if parsed.Query().Get("prompt") != "none" {
+		t.Fatalf("authorization prompt = %q, want none", parsed.Query().Get("prompt"))
+	}
 }
 
 func TestAuthorizationURLDeduplicatesConfiguredScopes(t *testing.T) {
@@ -81,7 +84,7 @@ func TestAuthorizationURLDeduplicatesConfiguredScopes(t *testing.T) {
 		RedirectURI:           "https://app.example/callback",
 		Scopes:                []string{"openid", "profile", "email", "profile"},
 	}, http.DefaultClient)
-	raw, err := c.AuthorizationURL("state", "nonce", "challenge")
+	raw, err := c.AuthorizationURL("state", "nonce", "challenge", "login")
 	if err != nil {
 		t.Fatal(err)
 	}

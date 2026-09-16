@@ -23,7 +23,7 @@ type Session struct {
 	ID, Subject, PlatformUserUUID, Email, ApplicationCode string
 	Permissions                                           []string
 	ProfileClaims                                         map[string]any
-	RefreshTokenCiphertext                                string
+	RefreshTokenCiphertext, IDTokenCiphertext             string
 	ExpiresAt                                             time.Time
 	Version                                               int64
 	Revoked                                               bool
@@ -64,16 +64,16 @@ func (s *PostgresStore) Create(ctx context.Context, value Session) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO authentication_sessions (id, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, expires_at, version) VALUES ($1,$2,NULLIF($3,'')::uuid,$4,$5,$6,$7,$8,1)`, value.ID, value.Subject, value.PlatformUserUUID, value.Email, value.ApplicationCode, permissions, value.RefreshTokenCiphertext, value.ExpiresAt)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO authentication_sessions (id, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, id_token_ciphertext, expires_at, version) VALUES ($1,$2,NULLIF($3,'')::uuid,$4,$5,$6,$7,$8,$9,1)`, value.ID, value.Subject, value.PlatformUserUUID, value.Email, value.ApplicationCode, permissions, value.RefreshTokenCiphertext, value.IDTokenCiphertext, value.ExpiresAt)
 	return err
 }
 func (s *PostgresStore) Get(ctx context.Context, id string) (Session, error) {
 	var value Session
 	var permissions []byte
-	var refreshToken sql.NullString
+	var refreshToken, idToken sql.NullString
 	var revokedAt sql.NullTime
 	var platformUserUUID sql.NullString
-	err := s.db.QueryRowContext(ctx, `SELECT id, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, expires_at, version, revoked_at FROM authentication_sessions WHERE id=$1 AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL`, id).Scan(&value.ID, &value.Subject, &platformUserUUID, &value.Email, &value.ApplicationCode, &permissions, &refreshToken, &value.ExpiresAt, &value.Version, &revokedAt)
+	err := s.db.QueryRowContext(ctx, `SELECT id, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, id_token_ciphertext, expires_at, version, revoked_at FROM authentication_sessions WHERE id=$1 AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL`, id).Scan(&value.ID, &value.Subject, &platformUserUUID, &value.Email, &value.ApplicationCode, &permissions, &refreshToken, &idToken, &value.ExpiresAt, &value.Version, &revokedAt)
 	if err == sql.ErrNoRows {
 		return Session{}, ErrNotFound
 	}
@@ -83,7 +83,7 @@ func (s *PostgresStore) Get(ctx context.Context, id string) (Session, error) {
 	if err := json.Unmarshal(permissions, &value.Permissions); err != nil {
 		return Session{}, err
 	}
-	value.RefreshTokenCiphertext = refreshToken.String
+	value.RefreshTokenCiphertext, value.IDTokenCiphertext = refreshToken.String, idToken.String
 	value.PlatformUserUUID = platformUserUUID.String
 	value.Revoked = revokedAt.Valid
 	return value, nil
@@ -93,7 +93,7 @@ func (s *PostgresStore) Update(ctx context.Context, value Session) error {
 	if err != nil {
 		return err
 	}
-	result, err := s.db.ExecContext(ctx, `UPDATE authentication_sessions SET email=$2, permissions=$3, refresh_token_ciphertext=$4, expires_at=$5, version=version+1, updated_at=CURRENT_TIMESTAMP WHERE id=$1 AND version=$6 AND revoked_at IS NULL`, value.ID, value.Email, permissions, value.RefreshTokenCiphertext, value.ExpiresAt, value.Version)
+	result, err := s.db.ExecContext(ctx, `UPDATE authentication_sessions SET email=$2, permissions=$3, refresh_token_ciphertext=$4, id_token_ciphertext=$5, expires_at=$6, version=version+1, updated_at=CURRENT_TIMESTAMP WHERE id=$1 AND version=$7 AND revoked_at IS NULL`, value.ID, value.Email, permissions, value.RefreshTokenCiphertext, value.IDTokenCiphertext, value.ExpiresAt, value.Version)
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func (s *PostgresStore) RotateRefreshToken(ctx context.Context, id string, rotat
 		return Session{}, err
 	}
 	defer tx.Rollback()
-	current, err := scanSession(tx.QueryRowContext(ctx, `SELECT id, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, expires_at, version, revoked_at FROM authentication_sessions WHERE id=$1 FOR UPDATE`, id))
+	current, err := scanSession(tx.QueryRowContext(ctx, `SELECT id, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, id_token_ciphertext, expires_at, version, revoked_at FROM authentication_sessions WHERE id=$1 FOR UPDATE`, id))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Session{}, ErrNotFound
@@ -135,7 +135,7 @@ func (s *PostgresStore) RotateRefreshToken(ctx context.Context, id string, rotat
 	if err != nil {
 		return Session{}, err
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE authentication_sessions SET email=$2, permissions=$3, refresh_token_ciphertext=$4, expires_at=$5, version=version+1, updated_at=CURRENT_TIMESTAMP WHERE id=$1 AND version=$6 AND revoked_at IS NULL`, value.ID, value.Email, permissions, value.RefreshTokenCiphertext, value.ExpiresAt, current.Version)
+	result, err := tx.ExecContext(ctx, `UPDATE authentication_sessions SET email=$2, permissions=$3, refresh_token_ciphertext=$4, id_token_ciphertext=$5, expires_at=$6, version=version+1, updated_at=CURRENT_TIMESTAMP WHERE id=$1 AND version=$7 AND revoked_at IS NULL`, value.ID, value.Email, permissions, value.RefreshTokenCiphertext, value.IDTokenCiphertext, value.ExpiresAt, current.Version)
 	if err != nil {
 		return Session{}, err
 	}
@@ -259,17 +259,17 @@ type sessionScanner interface{ Scan(...any) error }
 func scanSession(row sessionScanner) (Session, error) {
 	var value Session
 	var permissions []byte
-	var refreshToken sql.NullString
+	var refreshToken, idToken sql.NullString
 	var revokedAt sql.NullTime
 	var platformUserUUID sql.NullString
-	err := row.Scan(&value.ID, &value.Subject, &platformUserUUID, &value.Email, &value.ApplicationCode, &permissions, &refreshToken, &value.ExpiresAt, &value.Version, &revokedAt)
+	err := row.Scan(&value.ID, &value.Subject, &platformUserUUID, &value.Email, &value.ApplicationCode, &permissions, &refreshToken, &idToken, &value.ExpiresAt, &value.Version, &revokedAt)
 	if err != nil {
 		return Session{}, err
 	}
 	if err := json.Unmarshal(permissions, &value.Permissions); err != nil {
 		return Session{}, err
 	}
-	value.RefreshTokenCiphertext, value.Revoked = refreshToken.String, revokedAt.Valid
+	value.RefreshTokenCiphertext, value.IDTokenCiphertext, value.Revoked = refreshToken.String, idToken.String, revokedAt.Valid
 	value.PlatformUserUUID = platformUserUUID.String
 	return value, nil
 }

@@ -3,6 +3,9 @@ info:
   title: Example Orders Module API
   version: 0.1.0
   description: Test/development-only read API for the orders example module. This contract is not part of the production artifact.
+  license:
+    name: Proprietary
+    url: https://spdx.org/licenses/LicenseRef-Proprietary.html
 servers:
   - url: /
 paths:

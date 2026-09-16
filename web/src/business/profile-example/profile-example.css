@@ -1,7 +1,8 @@
 .profile-example { width: min(1040px, calc(100% - 64px)); margin: 52px auto 88px; color: #142033; }
 .profile-example__header { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .profile-example__brand { color: #08182d; font-size: 12px; font-weight: 800; letter-spacing: 1.25px; text-decoration: none; }
-.profile-example__admin { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid #d9e3ee; border-radius: 8px; color: #142033; background: #fff; font-size: 14px; font-weight: 700; text-decoration: none; }
+.profile-example__entry-nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.profile-example__entry-nav a, .profile-example__settings { display: inline-flex; align-items: center; gap: 6px; padding: 10px 14px; border: 1px solid #d9e3ee; border-radius: 8px; color: #142033; background: #fff; font-size: 14px; font-weight: 700; text-decoration: none; }
 .profile-example__intro { margin: 64px 0 32px; }
 .profile-example__eyebrow { margin: 0; color: #59677a; font-size: 12px; font-weight: 700; letter-spacing: .1em; }
 .profile-example__intro h1 { margin: 12px 0 10px; color: #08182d; font-size: clamp(34px, 5vw, 52px); letter-spacing: -.04em; }
@@ -14,6 +15,10 @@
 .profile-example__identity div { min-width: 0; padding: 14px 16px; border-radius: 10px; background: #f5f8fc; }
 .profile-example__identity dt { margin-bottom: 6px; color: #59677a; font-size: 12px; }
 .profile-example__identity dd { margin: 0; overflow-wrap: anywhere; color: #142033; font-size: 14px; font-weight: 650; }
+.profile-example__account-entry { margin: 0 0 22px; padding: 16px; border: 1px solid #d9e3ee; border-radius: 10px; background: #f5f8fc; }
+.profile-example__account-entry p { margin: 6px 0 12px; color: #59677a; line-height: 1.6; }
+.profile-example__account-entry .profile-example__eyebrow { margin: 0; }
+.profile-example__account-entry .profile-example__settings { color: #176b4a; background: #fff; }
 .profile-example__json { max-height: min(56vh, 620px); overflow: auto; margin: 0; padding: 22px; border-radius: 12px; color: #fff; background: #08182d; font: 13px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 .profile-example__empty { color: #59677a; line-height: 1.7; }
 .profile-example__error { color: #a52a37; }

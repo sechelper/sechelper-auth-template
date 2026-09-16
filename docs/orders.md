@@ -13,4 +13,4 @@
 
 ## 接入边界
 
-订单后端位于 `api/internal/business/orders/`，订单管理页面位于 `web/admin/src/business/orders/`。带 `example` 标签的 `api/cmd/server/business_runtime_example.go` 负责构造示例模块并注册统一授权中间件，默认构建使用空业务运行时；订单 Handler 只依赖订单 Application Service。测试机启用前执行 `make example-orders-build`，普通构建继续执行 `make build`。后续真实业务模块应采用独立、明确的装配方案，不把示例订单硬编码进默认框架。
+订单后端位于 `api/internal/business/orders/`，订单管理页面位于 `web/admin/src/business/orders/`。带 `example` 标签的 `api/cmd/server/business_runtime_example.go` 负责构造示例模块并注册统一授权中间件，默认构建使用空业务运行时；订单 Handler 只依赖订单 Application Service。测试机启用前执行 `make example-orders-test`，普通构建继续执行 `make build`。后续真实业务模块应采用独立、明确的装配方案，不把示例订单硬编码进默认框架。

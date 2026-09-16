@@ -11,6 +11,7 @@
 - Manifest：`api/internal/modules/manifest/`
 - React 前台框架：`web/src/framework/`，其中认证壳位于 `web/src/framework/auth/`
 - OpenAPI：`docs/contracts/openapi.yaml`
+- 授权框架维护：[`docs/authorization-framework-maintenance.md`](authorization-framework-maintenance.md)
 
 ## 重要限制
 

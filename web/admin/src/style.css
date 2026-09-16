@@ -438,7 +438,7 @@ tbody tr:hover { background: rgba(105,108,255,.035); }
 .platform-section-heading p { margin: .25rem 0 0; color: var(--sneat-muted); font-size: .75rem; }
 .platform-dependency-count { padding: .35rem .6rem; border-radius: 50rem; color: var(--platform-status-ok-text); background: var(--platform-status-ok-bg); font-size: .72rem; font-weight: 600; white-space: nowrap; }
 .platform-dependency-count.warning { color: var(--platform-status-warning-text); background: var(--platform-status-warning-bg); }
-.platform-system-facts { display: flex; flex-wrap: wrap; gap: 1rem 2rem; margin-top: 1rem; padding: .75rem 0; border-top: 1px solid var(--sneat-border); border-bottom: 1px solid var(--sneat-border); }
+.platform-system-facts { display: flex; flex-wrap: wrap; gap: 1rem 2rem; margin-top: .35rem; padding: .35rem 0 .6rem; border-bottom: 1px solid var(--sneat-border); }
 .platform-system-facts div { display: flex; align-items: baseline; gap: .75rem; }
 .platform-system-facts span { color: var(--sneat-muted); font-size: .75rem; }
 .platform-system-facts strong { color: var(--sneat-heading); font-size: .8rem; font-weight: 600; }
@@ -463,7 +463,7 @@ tbody tr:hover { background: rgba(105,108,255,.035); }
 .platform-gauge-value { fill: var(--sneat-heading); font-size: 22px; font-weight: 700; text-anchor: middle; }
 .platform-gauge-note { fill: var(--sneat-muted); font-size: 9px; text-anchor: middle; }
 .platform-resource-rows { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--sneat-border); }
-.platform-resource-row { display: grid; grid-template-columns: 1.75rem minmax(0,1fr); align-items: start; gap: .65rem; min-width: 0; padding: .85rem; border: 1px solid var(--sneat-border); border-radius: var(--sneat-radius); background: var(--sneat-body-bg); }
+.platform-resource-row { display: grid; grid-template-columns: 1.75rem minmax(0,1fr); align-items: center; gap: .65rem; min-width: 0; padding: .7rem .85rem; border: 1px solid var(--sneat-border); border-radius: var(--sneat-radius); background: var(--sneat-body-bg); }
 .platform-resource-icon { display: grid; width: 1.65rem; height: 1.65rem; place-items: center; border: 1px solid var(--platform-resource-icon-border); border-radius: 50%; color: var(--platform-resource-icon-text); background: var(--platform-resource-icon-bg); font-size: .72rem; font-weight: 700; }
 .platform-resource-icon.green { border-color: var(--platform-resource-icon-green-border); color: var(--platform-resource-icon-green-text); background: var(--platform-resource-icon-green-bg); font-size: .68rem; }
 .platform-resource-row-main { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: .35rem .75rem; min-width: 0; }
@@ -478,8 +478,10 @@ tbody tr:hover { background: rgba(105,108,255,.035); }
 .platform-overview-page .decision-result.denied { color: var(--platform-result-denied-text); background: var(--platform-result-denied-bg); }
 .platform-manifest-access-card { min-width: 0; padding: 1.25rem; }
 .platform-manifest-heading { padding-bottom: .8rem; border-bottom: 1px solid var(--sneat-border); }
-.platform-manifest-facts { margin-top: .45rem; }
-.platform-manifest-facts .detail-row { padding: .7rem 0; }
+.platform-manifest-facts { display: grid; gap: 0; margin: .55rem 0 0; }
+.platform-manifest-facts > div { display: grid; grid-template-columns: minmax(7rem,.8fr) minmax(0,1fr); align-items: center; gap: .75rem; min-height: 2.65rem; padding: .55rem 0; border-bottom: 1px solid var(--sneat-border); }
+.platform-manifest-facts dt { color: var(--sneat-muted); font-size: .78rem; }
+.platform-manifest-facts dd { margin: 0; color: var(--sneat-heading); font-size: .84rem; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
 .platform-action { margin: .65rem 0 0; }
 .platform-combined-divider { height: 1px; margin: 1.1rem 0; background: var(--sneat-border); }
 .platform-diagnostic-heading h3 { margin: 0; color: var(--sneat-heading); font-size: .92rem; font-weight: 600; }

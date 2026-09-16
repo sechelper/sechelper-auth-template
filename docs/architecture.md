@@ -1,5 +1,7 @@
 # 统一认证业务框架架构
 
+授权框架的维护边界和变更流程以[授权框架维护](authorization-framework-maintenance.md)为准；本文档只保留系统级架构和组件边界。
+
 ## 当前范围
 
 本框架仅支持 Confidential Client。Client Secret、access token 和 refresh token 只允许存在服务端；浏览器通过 HttpOnly、Secure、SameSite Cookie 持有业务会话。

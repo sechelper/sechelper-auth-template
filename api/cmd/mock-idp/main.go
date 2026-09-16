@@ -123,7 +123,7 @@ func (s *mockServer) userinfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *mockServer) authorization(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"subject": "local-user", "application_code": s.applicationCode, "manifest_version": 1, "permissions": map[string]any{"items": []map[string]any{{"permission_code": "admin:access", "name": "Admin", "risk_level": "normal"}, {"permission_code": "auth:session", "name": "Sessions", "risk_level": "normal"}, {"permission_code": "auth:session:revoke", "name": "Revoke sessions", "risk_level": "normal"}, {"permission_code": "auth:manifest:read", "name": "Read manifest", "risk_level": "normal"}, {"permission_code": "auth:manifest:sync", "name": "Sync manifest", "risk_level": "normal"}, {"permission_code": "audit:read", "name": "Audit", "risk_level": "normal"}}}})
+	writeJSON(w, http.StatusOK, map[string]any{"subject": "local-user", "application_code": s.applicationCode, "manifest_version": 1, "permissions": map[string]any{"items": []map[string]any{{"permission_code": "admin:access", "name": "Admin", "risk_level": "normal"}, {"permission_code": "auth:session", "name": "Current session", "risk_level": "normal"}, {"permission_code": "auth:manifest:read", "name": "Read manifest", "risk_level": "normal"}, {"permission_code": "auth:manifest:sync", "name": "Sync manifest", "risk_level": "normal"}, {"permission_code": "audit:read", "name": "Audit", "risk_level": "normal"}}}})
 }
 
 func (s *mockServer) provisioningToken(w http.ResponseWriter, _ *http.Request) {

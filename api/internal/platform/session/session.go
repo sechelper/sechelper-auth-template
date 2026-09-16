@@ -42,7 +42,6 @@ type Store interface {
 	Get(context.Context, string) (Session, error)
 	Update(context.Context, Session) error
 	Revoke(context.Context, string) error
-	ListBySubject(context.Context, string, int) ([]Session, error)
 }
 
 // RefreshRotator is the durable concurrency boundary for refresh-token
@@ -67,26 +66,6 @@ func (s *PostgresStore) Create(ctx context.Context, value Session) error {
 	}
 	_, err = s.db.ExecContext(ctx, `INSERT INTO authentication_sessions (id, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, expires_at, version) VALUES ($1,$2,NULLIF($3,'')::uuid,$4,$5,$6,$7,$8,1)`, value.ID, value.Subject, value.PlatformUserUUID, value.Email, value.ApplicationCode, permissions, value.RefreshTokenCiphertext, value.ExpiresAt)
 	return err
-}
-func (s *PostgresStore) ListBySubject(ctx context.Context, subject string, limit int) ([]Session, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, subject, platform_user_uuid, email, application_code, expires_at, created_at, updated_at, revoked_at FROM authentication_sessions WHERE subject=$1 AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL ORDER BY created_at DESC, id DESC LIMIT $2`, subject, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	result := make([]Session, 0)
-	for rows.Next() {
-		var value Session
-		var revokedAt sql.NullTime
-		var platformUserUUID sql.NullString
-		if err := rows.Scan(&value.ID, &value.Subject, &platformUserUUID, &value.Email, &value.ApplicationCode, &value.ExpiresAt, &value.CreatedAt, &value.UpdatedAt, &revokedAt); err != nil {
-			return nil, err
-		}
-		value.PlatformUserUUID = platformUserUUID.String
-		value.Revoked = revokedAt.Valid
-		result = append(result, value)
-	}
-	return result, rows.Err()
 }
 func (s *PostgresStore) Get(ctx context.Context, id string) (Session, error) {
 	var value Session
@@ -235,21 +214,6 @@ func (s *MemoryStore) RotateRefreshToken(ctx context.Context, id string, rotate 
 	value.Version = current.Version + 1
 	s.values[id] = value
 	return value, nil
-}
-
-func (s *MemoryStore) ListBySubject(_ context.Context, subject string, limit int) ([]Session, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	result := make([]Session, 0)
-	for _, value := range s.values {
-		if value.Subject == subject && !value.Revoked && time.Now().Before(value.ExpiresAt) {
-			result = append(result, value)
-		}
-	}
-	if limit > 0 && len(result) > limit {
-		result = result[:limit]
-	}
-	return result, nil
 }
 
 func (s *MemoryStore) SaveLoginTransaction(_ context.Context, value LoginTransaction) error {

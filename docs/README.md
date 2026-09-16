@@ -6,6 +6,7 @@
 - [后台平台模块](platform-admin.md)
 - [认证](authentication.md)
 - [授权与 Manifest](authorization.md)
+- [授权框架维护](authorization-framework-maintenance.md)
 - [配置](configuration.md)
 - [开发规范](development-standards.md)
 - [部署](deployment.md)

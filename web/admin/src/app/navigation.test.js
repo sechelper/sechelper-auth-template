@@ -4,7 +4,7 @@ import { initialAdminPath, normalizePathname } from "./navigation-path.js";
 
 test("normalizePathname keeps admin routes and removes the trailing slash", () => {
   assert.equal(normalizePathname("/admin/"), "/admin");
-  assert.equal(normalizePathname("/admin/sessions"), "/admin/sessions");
+  assert.equal(normalizePathname("/admin/not-a-route"), "/admin/not-a-route");
 });
 
 test("a public entry intent always opens the admin overview", () => {
@@ -16,7 +16,7 @@ test("a public entry intent always opens the admin overview", () => {
   const replacements = [];
   const history = { replaceState: (...args) => replacements.push(args) };
 
-  assert.equal(initialAdminPath({ pathname: "/admin/sessions", storage, history }), "/admin");
+  assert.equal(initialAdminPath({ pathname: "/admin/not-a-route", storage, history }), "/admin");
   assert.equal(values.has("sechelper:admin-entry"), false);
   assert.deepEqual(replacements, [[{}, "", "/admin/"]]);
 });
@@ -25,5 +25,5 @@ test("ordinary admin navigation preserves the requested page", () => {
   const storage = { getItem: () => null, removeItem: () => assert.fail("must not consume storage") };
   const history = { replaceState: () => assert.fail("must not replace history") };
 
-  assert.equal(initialAdminPath({ pathname: "/admin/sessions", storage, history }), "/admin/sessions");
+  assert.equal(initialAdminPath({ pathname: "/admin/not-a-route", storage, history }), "/admin/not-a-route");
 });

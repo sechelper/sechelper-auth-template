@@ -4,11 +4,9 @@
 
 ## Account / Session
 
-- `GET /v1/admin/account`：读取当前管理员的 Application 上下文；
-- `GET /v1/admin/account/sessions`：读取当前 Subject 的有效业务会话；
-- `DELETE /v1/admin/account/sessions/{sessionId}`：只能撤销属于当前 Subject 的会话。
+- `GET /v1/admin/account`：读取当前管理员的 Application 上下文。
 
-Session 主数据仍由 `authentication` 模块和 PostgreSQL Store 管理，Account 模块只通过 Session Store 的公开接口访问，不读取其他模块的表。
+`authentication` 模块和 PostgreSQL Store 继续管理浏览器认证会话及其登录、刷新、登出和到期生命周期；管理后台不提供列出或撤销会话的管理入口。Account 模块仅返回当前管理员的授权上下文。
 
 ## Permission / Manifest
 

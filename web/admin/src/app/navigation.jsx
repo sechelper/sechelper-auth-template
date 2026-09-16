@@ -6,7 +6,6 @@ export const menu = [
   { path: "/admin", label: "概览", icon: "dashboard" },
   { path: "/admin/permissions", label: "权限清单", icon: "permissions", section: "账号与安全", sectionOrder: 100, permission: "auth:manifest:read" },
   { path: "/admin/resources", label: "资源目录", icon: "resources", section: "账号与安全", sectionOrder: 100, permission: "admin:access" },
-  { path: "/admin/sessions", label: "活跃会话", icon: "sessions", section: "账号与安全", sectionOrder: 100, permission: "auth:session" },
   { path: "/admin/audit-events", label: "操作审计", icon: "audit", section: "监控与审计", sectionOrder: 200, permission: "audit:read" },
 ];
 
@@ -17,7 +16,6 @@ const iconPaths = {
   resources: ["M12 3l8 4-8 4-8-4z", "M4 12l8 4 8-4", "M4 17l8 4 8-4"],
   diagnostic: ["M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z", "M16 16l5 5", "M7.5 10.5h6", "M10.5 7.5v6"],
   profile: ["M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M4 21a8 8 0 0 1 16 0"],
-  sessions: ["M8 14a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M2 21a6 6 0 0 1 12 0", "M16 11a3 3 0 0 1 0 6", "M16 17a5 5 0 0 1 6 4"],
   audit: ["M8 4h8", "M9 2h6v4H9z", "M6 4H4v17h16V4h-2", "M8 11h8", "M8 16h5"],
   operations: ["M3 12h4l2-5 4 10 2-5h6", "M12 3a9 9 0 1 1-8.5 6"],
 };

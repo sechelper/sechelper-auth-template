@@ -1,5 +1,36 @@
 # 远程测试环境
 
+## 删除活跃会话管理功能重新部署（2026-09-16）
+
+- 部署源：基于远端既有测试源码提交 `5cd064995034d4fab23f276d2d8d65f2e981933e` 与本次授权路径增量，快照标识 `snapshot-5cd0649-ce0bb31cc9bcc71a`；生成清单保存在备份 `artifact-manifest.json`。用 `scp` 逐文件同步授权范围内的 Go、Admin、OpenAPI 和平台说明文件；未传输 `.git/`、`.env`、`config.yaml`、密钥或构建产物。远端测试源码移除了 Admin Sessions page 与 Account session service 两个文件。
+- 目标与范围：`root@47.116.4.57:/opt/sechelper-auth-template`，测试域名 `order-test.sechelper.com`，服务 `order-test.service`。删除后台“活跃会话”菜单/页面、列出及撤销会话的 `/v1/admin/account/sessions` API、对应权限声明和 OpenAPI DTO；保留认证登录/刷新/登出、当前账号上下文、会话存储与自然过期，不执行数据库迁移。
+- 验证与构建：远端 Go `1.26.8`、Node.js `24.21.0`（`/usr/local/bin/node`）、npm `11.19.1`（`/root/.local/bin/npm`）；`make release-check`、`make toolchain-check`、`make architecture-check`、`make test` 全部通过（Go 全量、Orders 示例、Web 8 项、Admin 17 项）。远端 Redocly CLI lint 在 npm registry 安装阶段停滞后停止；同一工作树本地 `make openapi-lint` 已通过，产生 10 条建议级既有警告。以远端原生 Go/Vite test 工具链构建 API、迁移器、Web 和 Admin，Vite 分别转换 39/54 个模块；`web/node_modules` 按锁文件安装，未修改依赖清单。Build ID 与应用版本维持 `20260915150445` / `0.1.0`。
+- 部署与验收：2026-09-16 10:10 UTC，`order-test.service` active；`/admin/`、JS/CSS、`/healthz`、`/readyz` 均 HTTP 200。未认证读取旧 `/v1/admin/account/sessions` 返回 404；当前账号接口仍返回 401（预期未认证），`/v1/auth/session` 返回 200。`/v1/version` 返回环境 `test`、版本 `0.1.0`、Build ID `20260915150445` 和快照修订标识。重启后首次就绪探测短暂返回 502，随后恢复为 200；最终服务与就绪检查均正常。
+- 备份与影响：`/opt/sechelper-auth-template/.deploy-backup-remove-active-sessions-20260916/` 保存部署前 API 二进制、完整 `web/dist`、被删除源码、所有同步源码及 artifact manifest；回滚可恢复这些文件后重启 `order-test.service`。未执行迁移或修改数据库/Redis/Nginx 配置，也未执行 Compose 生命周期操作；仅重启了测试业务服务。当前远端仍将 `/admin/sessions` 作为业务路由保留名单中的旧路径，以避免业务模块占用；该路径没有 Admin 菜单、页面或 API。
+
+## 服务器资源正常状态提示文案移除部署（2026-09-16）
+
+- 部署源：基于测试机上次同步状态，仅部署当前授权工作树的 `web/admin/src/modules/dashboard/DashboardPage.jsx`；SHA-256 `d20d74f67d42be0f33e151aef9c5a675c056e33480446f55f820d2a7a0e5bbe9`。远端原源码哈希与上一版部署记录一致；文件经 `scp` 上传至临时目录、核验后同步，未复制 `.git/`、凭据或配置。
+- 目标与范围：`root@47.116.4.57:/opt/sechelper-auth-template`，`order-test.sechelper.com`。正常状态不再显示“500ms 实时刷新”；资源请求异常仍显示“正在重试”。只替换后台静态资源 `/opt/sechelper-auth-template/web/dist/admin`，沿用原 `build-info.json`。
+- 验证：Node.js `24.21.0`（`/usr/local/bin/node`）、npm `11.19.1`（`/root/.local/bin/npm`）；工具链检查、`make architecture-check`、Admin 17 项测试通过。远端 Vite `7.1.7` test 构建成功，转换 55 个模块；临时构建输出已清理。构建使用远端已有锁定依赖，未改依赖或安装配置。
+- 验收与回滚：2026-09-16 09:16 UTC，线上 `/admin/`、新 JS/CSS、`/healthz`、`/readyz` 均返回 HTTP 200，Admin 静态目录权限为 `755`，`order-test.service` active。备份位于 `/opt/sechelper-auth-template/.deploy-backup-admin-refresh-label-20260916/`，包含部署前 Dashboard 源码和 Admin 静态目录；可用其中 `admin-dist-live/` 恢复静态页面、用 `source/` 恢复源码。
+- 影响范围：未重建或重启 API，未改数据库、Redis、Nginx、systemd、运行配置和业务数据；服务未重启。版本与 Build ID 保持不变。
+
+## APPLICATION 运行信息分隔线移除与上移部署（2026-09-16）
+
+- 部署源：基于测试机已同步源码提交 `5cd064995034d4fab23f276d2d8d65f2e981933e` 的当前授权工作树静态界面增量；`DashboardPage.jsx` SHA-256 `b2933a16dae4a93cb5d6838b0e6c37618ad4280f5e77116d57112c9975be29d2`，`style.css` SHA-256 `ac358eea74128b3f6e2e47df6aad5d827003cb363995747207c107edf55b1194`，`docs/dashboard.md` SHA-256 `084a0a096bf97e99bd82a62c3cac6a13091ebee24569682e9994eebb27a6e9f2`。经 `scp` 传输到远端临时目录并核对哈希后同步；未传输 `.git/`、凭据或配置。
+- 目标与范围：`root@47.116.4.57:/opt/sechelper-auth-template`，`order-test.sechelper.com`。移除运行时长/最近检查上方重复分隔线并压缩留白，使信息上移；运行时长与最近检查时间仍根据应用启动时间和实际检查时间动态显示。同步两份 Admin 源码和 `docs/dashboard.md`，替换 `/opt/sechelper-auth-template/web/dist/admin`。
+- 验证：远端 Node.js `24.21.0`（`/usr/local/bin/node`）、npm `11.19.1`（`/root/.local/bin/npm`）；工具链检查、架构检查通过，Admin 测试 17 项通过，Vite `7.1.7` test 构建转换 55 个模块成功。此次为未提交静态源码增量，未伪装为提交构建；在远端以 Vite test 模式构建至 `/tmp`，沿用原 `build-info.json` 中的版本及 Build ID，构建临时目录已清理。
+- 验收与回滚：2026-09-16 09:05 UTC，线上 `/admin/`、新 JS/CSS、`/healthz`、`/readyz` 均返回 HTTP 200；Admin 静态目录权限为 `755`，`order-test.service` active。备份在 `/opt/sechelper-auth-template/.deploy-backup-admin-resource-layout-20260916/`，包括部署前源码和 Admin 静态目录；可用其中 `admin-dist-live/` 恢复页面，并用 `source/` 恢复源码。`/v1/version` API 源提交仍为 `2a5e49811fca873b18bee1ac98f6badf532fab92`，API 未重建；PostgreSQL、Redis、Nginx、systemd、运行配置和业务数据均未修改，也未重启服务。
+
+## Manifest 信息排版与 APPLICATION 标题行移除部署（2026-09-16）
+
+- 部署源：基于测试机已同步源码提交 `5cd064995034d4fab23f276d2d8d65f2e981933e`，仅部署当前授权工作树中的两份后台前端文件；`DashboardPage.jsx` SHA-256 `a61fc6bda0d67d497acc7794781919dd9d403d3e61cb0d5d1a0e0144a71b9cf1`，`style.css` SHA-256 `2fca9199e523b56332c19f3cebea126c4cf6a6dc0fe447e046cb99ffb2ecf513`。以 `scp` 传入远端临时目录后核验，再同步至 `/opt/sechelper-auth-template`；未复制 `.git/`、密钥或配置。
+- 范围：删除 APPLICATION 内 `SYSTEM STATUS / 系统状态与依赖服务` 标题行；Manifest 版本、服务端修订和最近更新时间以对齐的语义化标签—数值行展示。只构建并替换 `/opt/sechelper-auth-template/web/dist/admin`。
+- 验证：远端 `/root/.local/bin/npm` 11.19.1 与 Node.js 24.21.0；`make architecture-check` 通过，Admin 测试 17 项通过，Vite 7.1.7 test 构建转换 55 个模块成功。由于此次是已授权的未提交静态源码增量，未将其标记为干净提交构建；通过远端 Admin Vite 命令将产物生成在 `/tmp` 并直接更新静态资源，构建临时目录已清理。保留现有 `build-info.json`，应用版本及 Build ID 未变。
+- 部署与验收：2026-09-16 08:53 UTC，Admin 页面、新 JS/CSS、`/healthz` 和 `/readyz` 均返回 HTTP 200；线上 bundle 含三个 Manifest 标签且不含已删除标题；`order-test.service` 为 active。切换后首次探测发现构建目录权限为 `700` 导致 Nginx 无法读取，已将 `/opt/sechelper-auth-template/web/dist/admin` 权限修正为 `755` 并复验成功。未改 Nginx 配置或 reload。
+- 备份与影响：部署前源码和 Admin 静态目录备份位于 `/opt/sechelper-auth-template/.deploy-backup-admin-manifest-layout-20260916/`；回滚可用其中 `admin-dist-live/` 替换当前 Admin 静态目录，并恢复 `source/` 文件。API、PostgreSQL、Redis、systemd、运行配置、其他静态站点和业务数据未修改；服务未重启。`/v1/version` 仍报告 API 源提交 `2a5e49811fca873b18bee1ac98f6badf532fab92`，API 本次未重建。
+
 ## 平台总览 APPLICATION 与资源卡片布局部署（2026-09-16）
 
 - 源码：本地工作站 `/Users/cookun/GolandProjects/sechelper-auth-template`，分支 `codex/full-reset-deploy-20260916`，提交 `5cd064995034d4fab23f276d2d8d65f2e981933e`。使用 `git archive` 生成不含 `.git/`、凭据、配置和依赖缓存的源码快照，经 `scp` 上传至测试主机；归档 SHA-256 为 `4ba57a500c38981273359c9b80a948fae76fc30859a4597de24bf53490152e88`。

@@ -1,6 +1,6 @@
 import "./home.css";
 import { useEffect, useState } from "react";
-import { apiOrigin } from "../../config/runtime.js";
+import { apiOrigin, identitySettingsURL } from "../../config/runtime.js";
 
 export function HomePage({ auth }) {
   const { state, login, logout, refresh, refreshSession } = auth;
@@ -43,6 +43,7 @@ export function HomePage({ auth }) {
         {state.status === "loading" && <p>正在读取会话…</p>}
         {state.status === "unauthenticated" && <><p>当前未登录。</p><button onClick={login}>登录</button></>}
         {state.status === "authenticated" && <>
+          {identitySettingsURL() && <p><a href={identitySettingsURL()}>个人设置（统一身份中心）</a></p>}
           <p>Subject：{state.subject}</p>
           <p>Email：{state.email || "未获取"}</p>
           <p>Application：{state.applicationCode}</p>

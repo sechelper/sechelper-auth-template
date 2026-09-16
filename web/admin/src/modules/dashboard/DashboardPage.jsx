@@ -47,12 +47,10 @@ const formatBytes = (value) => {
 };
 const resourceRefreshIntervalMs = 500;
 const resourceHistoryLimit = 60;
-const emptyResourceHistory = () => ({ sampledAt: null, cpu: [], memory: [], disk: [], goroutines: [] });
+const emptyResourceHistory = () => ({ sampledAt: null, cpu: [], memory: [] });
 const resourceSeries = [
   ["cpu", "cpuPercent"],
   ["memory", "memoryPercent"],
-  ["disk", "diskPercent"],
-  ["goroutines", "goroutines"],
 ];
 
 function appendResourceSnapshot(history, snapshot) {
@@ -68,7 +66,7 @@ function appendResourceSnapshot(history, snapshot) {
   return appended ? next : history;
 }
 
-function ResourceTrend({ label, points, maximum = 100, color, fullWidth = false }) {
+function ResourceTrend({ label, points, maximum = 100, color }) {
   const width = 1000;
   const height = 42;
   const inset = 4;
@@ -83,7 +81,7 @@ function ResourceTrend({ label, points, maximum = 100, color, fullWidth = false 
   const last = coordinates.at(-1);
   const current = points.at(-1)?.value;
   const currentLabel = current === undefined ? "数据采集中" : maximum ? formatPercent(current) : current.toLocaleString("zh-CN");
-  return <svg className="platform-resource-trend" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${label}近 30 秒趋势，当前${currentLabel}`} style={{ display: "block", width: "100%", height: "2.35rem", minWidth: 0, overflow: "visible", ...(fullWidth ? { gridColumn: "1 / -1" } : {}) }}>
+  return <svg className="platform-resource-trend" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${label}近 30 秒趋势，当前${currentLabel}`} style={{ display: "block", width: "100%", height: "2.35rem", minWidth: 0, overflow: "visible" }}>
     <title>{label}趋势 · {currentLabel}</title>
     <line x1={inset} y1={height - inset} x2={width - inset} y2={height - inset} stroke="var(--sneat-border)" strokeDasharray="3 5" strokeWidth="1" />
     {coordinates.length > 0 && <polyline points={polyline} fill="none" stroke={color} strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />}
@@ -229,7 +227,7 @@ export function DashboardPage() {
   return <div className="platform-overview-page">
     <PageHeader code="PLATFORM OVERVIEW" title="平台总览" description="查看应用健康、依赖服务、服务器资源与授权同步情况。" />
 
-    <section className="platform-app-banner card" aria-label="应用信息、系统状态与依赖服务" style={{ display: "block" }}>
+    <section className="platform-app-banner card" aria-label="应用信息与依赖状态" style={{ display: "block" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "2rem", flexWrap: "wrap" }}>
         <div className="platform-app-copy">
           <span className="eyebrow">APPLICATION</span>
@@ -240,10 +238,7 @@ export function DashboardPage() {
           <span className="health-dot" />{unhealthy ? "系统需关注" : "系统运行正常"}
         </div>
       </div>
-      <div style={{ marginTop: "1.5rem", paddingTop: "1.25rem", borderTop: "1px solid var(--sneat-border)" }}>
-        <div className="platform-section-heading">
-          <div><span className="eyebrow">SYSTEM STATUS</span><h2 id="platform-system-title">系统状态与依赖服务</h2></div>
-        </div>
+      <div style={{ marginTop: "1rem", paddingTop: ".75rem", borderTop: "1px solid var(--sneat-border)" }}>
         <div className="platform-system-facts">
           <div><span>运行时长</span><strong>{formatUptime(app.startedAt)}</strong></div>
           <div><span>最近检查</span><strong>{formatDateTime(checkedAt)}</strong></div>
@@ -258,7 +253,7 @@ export function DashboardPage() {
       <section className="card platform-resource-card" aria-labelledby="platform-resource-title">
         <div className="platform-section-heading">
           <div><span className="eyebrow">SERVER RESOURCES</span><h2 id="platform-resource-title">服务器资源</h2><p>{resources.sampledAt ? `最近采样 · ${formatSampleTime(resources.sampledAt)} · 保留近 30 秒趋势` : "等待首个资源快照"}</p></div>
-          <span className={`status-pill ${resourceError ? "health-warning" : "health-ok"}`} role="status"><span className={`health-dot ${resourceError ? "health-warning" : "health-ok"}`} />{resourceError ? "正在重试" : "500ms 实时刷新"}</span>
+          {resourceError && <span className="status-pill health-warning" role="status"><span className="health-dot health-warning" />正在重试</span>}
         </div>
         <div className="platform-resource-gauges">
           <ResourceGauge label="CPU 使用率" percent={resources.cpuPercent} trend={resourceHistory.cpu} color="var(--sneat-info)" />
@@ -267,11 +262,11 @@ export function DashboardPage() {
         <div className="platform-resource-rows">
           <div className="platform-resource-row">
             <span className="platform-resource-icon">▤</span>
-            <div className="platform-resource-row-main"><span>磁盘使用率</span><strong>{formatPercent(resources.diskPercent)}</strong><ResourceTrend label="磁盘使用率" points={resourceHistory.disk} color="var(--sneat-primary)" fullWidth /><small>项目所在盘 · {resources.diskUsedBytes != null && resources.diskTotalBytes != null ? `${formatBytes(resources.diskUsedBytes)} / ${formatBytes(resources.diskTotalBytes)}` : "数据暂不可用"}</small></div>
+            <div className="platform-resource-row-main"><span>磁盘使用率</span><strong>{formatPercent(resources.diskPercent)}</strong><small>项目所在盘 · {resources.diskUsedBytes != null && resources.diskTotalBytes != null ? `${formatBytes(resources.diskUsedBytes)} / ${formatBytes(resources.diskTotalBytes)}` : "数据暂不可用"}</small></div>
           </div>
           <div className="platform-resource-row">
             <span className="platform-resource-icon green">Go</span>
-            <div className="platform-resource-row-main"><span>Goroutines</span><strong>{Number.isInteger(resources.goroutines) ? resources.goroutines.toLocaleString("zh-CN") : "—"}</strong><ResourceTrend label="Goroutines" points={resourceHistory.goroutines} maximum={null} color="var(--sneat-success)" fullWidth /><small>{resources.sampledAt ? "Go 进程协程数" : "等待资源采样"}</small></div>
+            <div className="platform-resource-row-main"><span>Goroutines</span><strong>{Number.isInteger(resources.goroutines) ? resources.goroutines.toLocaleString("zh-CN") : "—"}</strong><small>{resources.sampledAt ? "Go 进程协程数" : "等待资源采样"}</small></div>
           </div>
         </div>
       </section>
@@ -281,11 +276,11 @@ export function DashboardPage() {
           <div><span className="eyebrow">AUTHORIZATION</span><h2>Manifest 状态</h2></div>
           <span className={`status-pill ${manifestReady ? "health-ok" : "health-warning"}`}>{statusLabel(manifest.status)}</span>
         </div>
-        <div className="platform-manifest-facts">
-          <div><span>Manifest 版本</span><strong>{manifest.version || "—"}</strong></div>
-          <div><span>服务端修订</span><strong>{manifest.serverRevision || "—"}</strong></div>
-          <div><span>最近更新时间</span><strong>{formatDateTime(manifest.updatedAt)}</strong></div>
-        </div>
+        <dl className="platform-manifest-facts">
+          <div><dt>Manifest 版本</dt><dd>{manifest.version || "—"}</dd></div>
+          <div><dt>服务端修订</dt><dd>{manifest.serverRevision || "—"}</dd></div>
+          <div><dt>最近更新时间</dt><dd>{formatDateTime(manifest.updatedAt)}</dd></div>
+        </dl>
         <div className="platform-combined-divider" />
         <div className="platform-diagnostic-heading"><h3>访问控制诊断</h3><p>检查指定资源的授权决策，不会绕过业务 API。</p></div>
         <form className="platform-access-form" onSubmit={checkAccess}>

@@ -1,5 +1,7 @@
 # 授权与 Manifest
 
+本文档只描述运行时授权行为和 Manifest 同步语义。框架边界、维护流程、变更门槛、测试门禁和回滚规则统一维护在[授权框架维护](authorization-framework-maintenance.md)，不要在业务模块文档中复制这些规则。
+
 业务模块通过 Manifest Registry 声明 `permission_code`、风险等级和 API 绑定。权限码使用业务命名空间，例如 `order:read`。
 
 ## 当前执行链
@@ -22,3 +24,9 @@ Manifest 同步接口为：
 服务启动时先执行一次同步，运行期间按 `MANIFEST_SYNC_INTERVAL` 定时同步。同步使用内容哈希和 `Idempotency-Key`，只有成功保存远端回执后才更新本地状态。Manifest 内容变化时会清理对应 Application 的授权缓存。
 
 开发环境默认使用内存授权缓存；配置 `REDIS_URL` 后使用 Redis 授权缓存。生产环境必须配置 Redis。Redis 使用按 Session 的缓存 Key 和按 Application 的索引集合，Manifest 变化时可以批量清理对应 Application 的授权缓存。
+
+## 相关文档
+
+- [授权框架维护](authorization-framework-maintenance.md)：框架代码地图、注册契约、维护授权、验证和回滚。
+- [业务模块开发模板](business-module-template.md)：业务模块如何声明权限、资源、审计和受保护路由。
+- [OpenAPI 合同](contracts/openapi.yaml)：路由、字段、状态码和错误响应的机器可读定义。

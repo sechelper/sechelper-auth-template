@@ -247,47 +247,6 @@ paths:
                         items: { type: string }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-  /v1/admin/account/sessions:
-    get:
-      operationId: listAdminSessions
-      summary: List current administrator sessions
-      security: [{ sessionCookie: [] }]
-      x-required-permission: auth:session
-      responses:
-        '200':
-          description: Active sessions for the current identity subject.
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [data, meta]
-                properties:
-                  data:
-                    type: array
-                    items: { $ref: '#/components/schemas/AdminSession' }
-                  meta:
-                    type: object
-                    required: [hasMore]
-                    properties:
-                      hasMore: { type: boolean }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-  /v1/admin/account/sessions/{sessionId}:
-    delete:
-      operationId: revokeAdminSession
-      summary: Revoke one session owned by the current administrator
-      security: [{ sessionCookie: [] }]
-      x-required-permission: auth:session:revoke
-      parameters:
-        - in: path
-          name: sessionId
-          required: true
-          schema: { type: string }
-      responses:
-        '204': { description: Session revoked }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { description: Session not found }
   /v1/admin/permissions:
     get:
       operationId: listPermissions
@@ -438,28 +397,6 @@ components:
           type: array
           items: { type: string }
         expiresAt: { type: string, format: date-time }
-    AdminSession:
-      type: object
-      required: [id, subject, identitySubject, email, applicationCode, expiresAt, createdAt, updatedAt, revoked]
-      properties:
-        id: { type: string }
-        subject:
-          type: string
-          deprecated: true
-          description: Compatibility alias for identitySubject.
-        identitySubject:
-          type: string
-          description: Opaque, issuer-scoped subject claim from the configured identity issuer; not guaranteed to be a UUID.
-        platformUserUuid:
-          type: string
-          format: uuid
-          description: Local stable UUID; omitted for sessions created before the identity mapping migration.
-        email: { type: string }
-        applicationCode: { type: string }
-        expiresAt: { type: string, format: date-time }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-        revoked: { type: boolean }
     VersionResponse:
       type: object
       required: [data]

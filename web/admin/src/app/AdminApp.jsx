@@ -4,7 +4,6 @@ import { initialAdminPath, menu, navigate, normalizePathname } from "./navigatio
 import { AdminLayout, Loading } from "./components.jsx";
 import { DashboardPage } from "../modules/dashboard/DashboardPage.jsx";
 import { ManifestPage } from "../modules/permissions/ManifestPage.jsx";
-import { SessionsPage } from "../modules/account/SessionsPage.jsx";
 import { PermissionsPage } from "../modules/permissions/PermissionsPage.jsx";
 import { AuditPage } from "../modules/audit/AuditPage.jsx";
 import { ResourcesPage } from "../modules/access/ResourcesPage.jsx";
@@ -23,7 +22,6 @@ function ServerErrorPage({ retry }) { return <ErrorPage code="500" title="服务
 
 const frameworkRoutePermissions = {
   "/admin/manifest": "auth:manifest:read",
-  "/admin/sessions": "auth:session",
   "/admin/permissions": "auth:manifest:read",
   "/admin/audit-events": "audit:read",
   "/admin/resources": "admin:access",
@@ -40,7 +38,6 @@ function Page({ pathname, session, hasPermission }) {
   if (requiredPermission && !hasPermission(requiredPermission)) return <ForbiddenPage />;
   if (pathname === "/admin") return <DashboardPage session={session} />;
   if (pathname === "/admin/manifest") return <ManifestPage />;
-  if (pathname === "/admin/sessions") return <SessionsPage />;
   if (pathname === "/admin/permissions") return <PermissionsPage />;
   if (pathname === "/admin/audit-events") return <AuditPage />;
   if (pathname === "/admin/resources") return <ResourcesPage />;

@@ -116,10 +116,9 @@ func main() {
 	}
 	defer closeAuthorizationCache()
 	authorizationModule := authorization.New(sessions, cfg.Session.CookieName, authorizationCache)
-	accountModule := account.New(sessions)
+	accountModule := account.New()
 	auditModule := audit.New(auditapplication.NewService(auditpersistence.NewRepository(db)))
 	authService.SetAuditRecorder(auditModule.Service)
-	accountModule.SetAuditRecorder(auditModule.Service)
 	authorizationModule.ResourceHandler.SetDecisionRecorder(func(ctx context.Context, actor authorizationdomain.Context, decision authorizationdomain.Decision, requestID string) {
 		result := "denied"
 		if decision.Allowed {
@@ -237,7 +236,7 @@ func buildRouter(cfg config.Config, logger *zap.Logger, db *sql.DB, manifestRead
 	authHandler.Register(v1)
 	authorizationModule.RegisterRoutes(v1)
 	dashboardModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"))
-	accountModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("auth:session"), authorizationModule.Middleware.RequirePermission("auth:session:revoke"))
+	accountModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("auth:session"))
 	authorizationModule.RegisterResourceRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"))
 	auditModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("audit:read"))
 	operationsModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"))
@@ -315,13 +314,10 @@ func registerFrameworkPermissions(m *manifest.Module) error {
 	if err := m.Register(domain.Permission{Code: "admin:access", Name: "进入管理端", Description: "访问本应用后台管理能力", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/authorization/me"}, {Method: "GET", Path: "/v1/admin/dashboard/overview"}, {Method: "GET", Path: "/v1/admin/resources"}, {Method: "POST", Path: "/v1/admin/access-decisions/check"}, {Method: "GET", Path: "/v1/admin/operations/overview"}}}); err != nil {
 		return err
 	}
-	if err := m.Register(domain.Permission{Code: "auth:session", Name: "查看认证会话", Description: "读取当前业务会话和管理端会话", RiskLevel: "normal", APIs: []domain.API{{Method: "GET", Path: "/v1/auth/session"}, {Method: "GET", Path: "/v1/admin/account"}, {Method: "GET", Path: "/v1/admin/account/sessions"}}}); err != nil {
+	if err := m.Register(domain.Permission{Code: "auth:session", Name: "查看当前会话", Description: "读取当前登录会话和账号上下文", RiskLevel: "normal", APIs: []domain.API{{Method: "GET", Path: "/v1/auth/session"}, {Method: "GET", Path: "/v1/admin/account"}}}); err != nil {
 		return err
 	}
 	if err := m.Register(domain.Permission{Code: "auth:manifest:read", Name: "查看认证 Manifest", Description: "查看本 Application 的 Manifest 同步状态", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/internal/authorization-manifest"}}}); err != nil {
-		return err
-	}
-	if err := m.Register(domain.Permission{Code: "auth:session:revoke", Name: "撤销会话", Description: "撤销本 Application 的业务会话", RiskLevel: "critical", APIs: []domain.API{{Method: "DELETE", Path: "/v1/admin/account/sessions/{sessionId}"}}}); err != nil {
 		return err
 	}
 	if err := m.Register(domain.Permission{Code: "audit:read", Name: "查看操作审计", Description: "查看管理端操作审计记录", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/admin/audit-events"}}}); err != nil {

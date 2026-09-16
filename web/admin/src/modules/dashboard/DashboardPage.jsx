@@ -233,7 +233,6 @@ export function DashboardPage({ session }) {
         <div className="platform-app-copy">
           <span className="eyebrow">APPLICATION</span>
           <h2>{app.name || "—"}</h2>
-          <p>{app.environment || "—"} 环境 · 当前版本 {app.version || "—"} · Build ID <code>{app.buildId || "—"}</code></p>
         </div>
         <div className={`platform-app-state ${unhealthy ? "warning" : ""}`} role="status">
           <span className="health-dot" />{unhealthy ? "系统需关注" : "系统运行正常"}
@@ -244,6 +243,8 @@ export function DashboardPage({ session }) {
         <div><span>最近检查</span><strong>{formatDateTime(checkedAt)}</strong></div>
       </div>
     </section>
+
+    <DeploymentStatusPanels />
 
     <section className="platform-dependencies-card card" aria-label="依赖服务">
       <div className="platform-section-heading">
@@ -299,6 +300,5 @@ export function DashboardPage({ session }) {
         {accessResult && <div className={`decision-result ${accessResult.allowed ? "allowed" : "denied"}`}><strong>{accessResult.allowed ? "允许访问" : "拒绝访问"}</strong><span>原因：{accessResult.reasonCode}</span>{accessResult.permission && <span>所需权限：{accessResult.permission}</span>}</div>}
       </section>
     </div>
-    <DeploymentStatusPanels />
   </div>;
 }

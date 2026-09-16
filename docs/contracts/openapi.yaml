@@ -428,7 +428,7 @@ paths:
       summary: Read framework deployment readiness
       description: Returns non-secret bootstrap, configuration-center, migration, dependency, and build readiness checks. It never returns passwords, tokens, encryption keys, or connection strings.
       security: [{ sessionCookie: [] }]
-      x-required-permission: deployment:read
+      x-required-permission: admin:access
       responses:
         '200':
           description: Deployment readiness guide

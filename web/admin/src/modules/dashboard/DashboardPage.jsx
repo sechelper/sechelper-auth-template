@@ -294,6 +294,6 @@ export function DashboardPage({ session }) {
         {accessResult && <div className={`decision-result ${accessResult.allowed ? "allowed" : "denied"}`}><strong>{accessResult.allowed ? "允许访问" : "拒绝访问"}</strong><span>原因：{accessResult.reasonCode}</span>{accessResult.permission && <span>所需权限：{accessResult.permission}</span>}</div>}
       </section>
     </div>
-    {session?.permissions?.includes("deployment:read") && <DeploymentStatusPanels />}
+    <DeploymentStatusPanels />
   </div>;
 }

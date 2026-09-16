@@ -7,7 +7,6 @@ export const menu = [
   { path: "/admin/permissions", label: "权限清单", icon: "permissions", section: "账号与安全", sectionOrder: 100, permission: "auth:manifest:read" },
   { path: "/admin/resources", label: "资源目录", icon: "resources", section: "账号与安全", sectionOrder: 100, permission: "admin:access" },
   { path: "/admin/audit-events", label: "操作审计", icon: "audit", section: "监控与审计", sectionOrder: 200, permission: "audit:read" },
-  { path: "/admin/deployment", label: "部署引导", icon: "deployment", section: "系统设置", sectionOrder: 300, permission: "deployment:read" },
 ];
 
 const iconPaths = {

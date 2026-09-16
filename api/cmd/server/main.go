@@ -278,7 +278,7 @@ func buildRouter(cfg config.Config, logger *zap.Logger, db *sql.DB, manifestRead
 	accountModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("auth:session"))
 	authorizationModule.RegisterResourceRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"))
 	auditModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("audit:read"))
-	operationsModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"), authorizationModule.Middleware.RequirePermissions("admin:access", "deployment:read"))
+	operationsModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"), authorizationModule.Middleware.RequirePermission("admin:access"))
 	configurationModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermissions("admin:access", "configuration:read"), authorizationModule.Middleware.RequirePermissions("admin:access", "configuration:write"))
 	manifestModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermissions("admin:access", "auth:manifest:read"), authorizationModule.Middleware.RequirePermissions("admin:access", "auth:manifest:sync"))
 	if err := businessRuntime.RegisterRoutes(v1, authorizationModule.Middleware); err != nil {
@@ -369,7 +369,7 @@ func rateLimitAuth(limiter ratelimit.Limiter, cfg config.RateLimitConfig, servic
 }
 
 func registerFrameworkPermissions(m *manifest.Module) error {
-	if err := m.Register(domain.Permission{Code: "admin:access", Name: "进入管理端", Description: "访问本应用后台管理能力", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/authorization/me"}, {Method: "GET", Path: "/v1/admin/dashboard/overview"}, {Method: "GET", Path: "/v1/admin/resources"}, {Method: "POST", Path: "/v1/admin/access-decisions/check"}, {Method: "GET", Path: "/v1/admin/operations/overview"}}}); err != nil {
+	if err := m.Register(domain.Permission{Code: "admin:access", Name: "进入管理端", Description: "访问本应用后台管理能力和平台概览接口", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/authorization/me"}, {Method: "GET", Path: "/v1/admin/dashboard/overview"}, {Method: "GET", Path: "/v1/admin/dashboard/resources"}, {Method: "GET", Path: "/v1/admin/deployment/guide"}, {Method: "GET", Path: "/v1/admin/resources"}, {Method: "POST", Path: "/v1/admin/access-decisions/check"}, {Method: "GET", Path: "/v1/admin/operations/overview"}}}); err != nil {
 		return err
 	}
 	if err := m.Register(domain.Permission{Code: "auth:session", Name: "查看当前会话", Description: "读取当前登录会话和账号上下文", RiskLevel: "normal", APIs: []domain.API{{Method: "GET", Path: "/v1/auth/session"}, {Method: "GET", Path: "/v1/admin/account"}}}); err != nil {

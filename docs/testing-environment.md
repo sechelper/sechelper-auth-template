@@ -1,5 +1,14 @@
 # 远程测试环境
 
+## 平台总览 APPLICATION 与资源卡片布局部署（2026-09-16）
+
+- 源码：本地工作站 `/Users/cookun/GolandProjects/sechelper-auth-template`，分支 `codex/full-reset-deploy-20260916`，提交 `5cd064995034d4fab23f276d2d8d65f2e981933e`。使用 `git archive` 生成不含 `.git/`、凭据、配置和依赖缓存的源码快照，经 `scp` 上传至测试主机；归档 SHA-256 为 `4ba57a500c38981273359c9b80a948fae76fc30859a4597de24bf53490152e88`。
+- 目标：`root@47.116.4.57:/opt/sechelper-auth-template`，测试域名 `order-test.sechelper.com`，服务 `order-test.service`。远端部署前 Dashboard、样式和页面文档源码均与已部署的 `2a5e49811fca873b18bee1ac98f6badf532fab92` 快照一致；未发现远端源码冲突。
+- 构建与工具链：远端 Go `1.26.8`（`/usr/local/bin/go`）、Node.js `24.21.0`（`/usr/local/bin/node`）、npm `11.19.1`（`/root/.local/bin/npm`）。默认 PATH 中 `/usr/local/bin/npm` 为 `11.19.0`，不符合项目要求；本次显式将 `/root/.local/bin` 放在 PATH 前端。`make toolchain-check`、`make architecture-check` 通过；`npm ci --prefix web/admin --no-audit --no-fund` 后 Admin 测试 17 项通过；`WORKTREE_CLEAN=true CHECKED_OUT_REVISION=5cd064995034d4fab23f276d2d8d65f2e981933e make build ENV=test COMPONENT=web` 成功，Vite 前台/后台分别转换 39/55 个模块。npm 对锁定的 `esbuild@0.25.12` install script 给出 allowScripts 提示，未修改依赖配置。构建临时目录已清理。
+- 发布范围：仅同步 `web/admin/src/modules/dashboard/DashboardPage.jsx`、`web/admin/src/style.css`、`docs/dashboard.md`，并替换 `/opt/sechelper-auth-template/web/dist/admin`。将系统状态与依赖状态并入 APPLICATION，移除依赖数量汇总；磁盘和 Goroutines 改为紧凑并列趋势卡片。备份位于 `/opt/sechelper-auth-template/.deploy-backup-admin-overview-5cd0649/`，含部署前源码、完整 Admin 静态目录及 `artifact-manifest.json`。回滚时用备份 `admin-dist-live/` 替换当前 `web/dist/admin/` 并恢复 `source/` 中三份文件；不需要重启服务或 reload Nginx。
+- 验收：2026-09-16 08:41 UTC，线上 `/admin/`、本次 Admin JS/CSS、`/healthz`、`/readyz` 均返回 HTTP 200；新 bundle 包含 `SYSTEM STATUS`、`Goroutines`，不含旧“项正常”汇总文字；`order-test.service` 为 active。`/v1/version` 仍显示 API 源提交 `2a5e49811fca873b18bee1ac98f6badf532fab92`，因为本次仅更新后台静态资源，未重建或重启 API；应用版本和 Build ID 仍为 `0.1.0` 与 `20260915150445`。
+- 影响范围：未重启业务服务，未修改 API、PostgreSQL、Redis、Nginx、systemd、运行配置或业务数据；未执行迁移或 Compose 生命周期命令。
+
 ## 全量测试环境重建部署（2026-09-16 02:51 Asia/Shanghai）
 
 - 源码：本地分支 `codex/full-reset-deploy-20260916`，测试源提交 `ebceb01a9a0e68f213adbdb22fe9c4473e5ed64a`；由 `git archive` 打包并经 `scp` 上传，归档 SHA-256 `5b65f96ac07e79b484b6ddb923699b3bda2c7ef2edf0bc722cf4e7fd5d28d7b5`。快照不含 `.git/`、`.env`、`config.yaml`、依赖缓存或构建产物。远端源码已同步到该提交；清除两处旧源码目录。保留远端 `.env`、日志、bin/dist 旧版本回滚副本、IDE 状态、node_modules 缓存和 82 个历史 `.deploy-backup-*` 目录。

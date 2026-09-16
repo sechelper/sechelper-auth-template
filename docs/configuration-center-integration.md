@@ -79,7 +79,9 @@ func New(clientFactory ClientFactory, config application.ConfigurationProvider) 
 
 ## 生效与回滚
 
-配置中心依赖 PostgreSQL bootstrap 连接和 `SESSION_ENCRYPTION_KEY`。因此数据库连接本身和加密密钥必须仍由启动配置或部署密钥提供，不能依赖同一个尚未建立的配置中心。
+配置中心依赖 PostgreSQL bootstrap 连接和独立的 `CONFIG_CENTER_ENCRYPTION_KEY`。因此数据库连接本身和配置中心加密密钥必须仍由启动配置或部署密钥提供，不能依赖同一个尚未建立的配置中心。兼容期可以使用 `SESSION_ENCRYPTION_KEY` 作为解密密钥，但新部署应尽快切换到独立密钥。
+
+框架启动流程会先读取配置中心，再覆盖支持的 `DATABASE_*`、`REDIS_URL`、`IDENTITY_*`、`SESSION_*`、`LOG_*` 和其他框架运行参数，并重新构建依赖。`APP_ENV`、`APP_VERSION`、`APP_CONFIG_FILE`、`CONFIG_CENTER_DATABASE_URL` 和 `CONFIG_CENTER_ENCRYPTION_KEY` 不允许由配置中心覆盖。
 
 普通业务配置通过 provider 读取时可在运行期间取得最新值。数据库连接池、Redis 客户端等已经创建的基础设施不会因为后台修改自动重建；修改这类配置后应执行受控重启，并先验证新值，再下线旧实例。
 

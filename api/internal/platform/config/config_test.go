@@ -59,3 +59,27 @@ func TestProductionRequiresExplicitConfigPath(t *testing.T) {
 		t.Fatalf("Load() error = %v, want explicit production path error", err)
 	}
 }
+
+func TestApplyConfigurationValuesOverridesFrameworkEnvironmentValues(t *testing.T) {
+	setRequiredEnvironment(t)
+	path := filepath.Join("..", "..", "..", "..", "config.example.yaml")
+	base, err := Load("--config", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := ApplyConfigurationValues(base, map[string]string{
+		"DATABASE_PASSWORD":      "center-password",
+		"REDIS_URL":              "redis://127.0.0.1:6379/2",
+		"LOG_LEVEL":              "debug",
+		"SESSION_ENCRYPTION_KEY": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+	})
+	if err != nil {
+		t.Fatalf("ApplyConfigurationValues() error = %v", err)
+	}
+	if resolved.Database.Password != "center-password" || resolved.App.RedisURL != "redis://127.0.0.1:6379/2" || resolved.Log.Level != "debug" {
+		t.Fatalf("resolved framework config = %+v", resolved)
+	}
+	if resolved.App.Environment != base.App.Environment {
+		t.Fatalf("configuration center changed APP_ENV from %q to %q", base.App.Environment, resolved.App.Environment)
+	}
+}

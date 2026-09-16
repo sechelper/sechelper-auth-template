@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
 )
 
@@ -24,6 +25,7 @@ type Config struct {
 	CORS      CORSConfig      `mapstructure:"cors"`
 	Security  SecurityConfig  `mapstructure:"security"`
 	Log       LogConfig       `mapstructure:"log"`
+	Bootstrap BootstrapConfig `mapstructure:"bootstrap"`
 }
 type AppConfig struct{ Name, Environment, ListenAddr, PublicWebOrigin, APIOrigin, PrimaryDomain, TestDomainSuffix, RedisURL string }
 type ServerConfig struct {
@@ -70,6 +72,10 @@ type LogConfig struct {
 	RetentionDays, MaxSizeMB, MaxBackups, MaxAgeDays                         int
 	Development, DisableCaller, DisableStacktrace, Sampling, Compress, Debug bool
 }
+type BootstrapConfig struct {
+	DatabaseURL   string `mapstructure:"databaseUrl"`
+	EncryptionKey string `mapstructure:"encryptionKey"`
+}
 
 func Load(args ...string) (Config, error) {
 	path, explicit, err := resolvePath(args)
@@ -102,6 +108,57 @@ func Load(args ...string) (Config, error) {
 	}
 	return c, nil
 }
+
+// ApplyConfigurationValues overlays the framework-supported environment
+// variables supplied by the configuration center. Deployment metadata and
+// bootstrap-only values are deliberately excluded from this overlay.
+func ApplyConfigurationValues(base Config, values map[string]string) (Config, error) {
+	var raw map[string]any
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{TagName: "mapstructure", Result: &raw})
+	if err != nil {
+		return Config{}, fmt.Errorf("create configuration decoder: %w", err)
+	}
+	if err := decoder.Decode(base); err != nil {
+		return Config{}, fmt.Errorf("encode application config: %w", err)
+	}
+	v := viper.New()
+	setDefaults(v)
+	v.MergeConfigMap(raw)
+	if value := strings.TrimSpace(values["DATABASE_URL"]); value != "" {
+		if err := validateBootstrapDatabaseURL(value); err != nil {
+			return Config{}, err
+		}
+		v.Set("bootstrap.databaseUrl", value)
+	}
+	bindings := envBindings()
+	for key, env := range bindings {
+		if env == "APP_ENV" || env == "DATABASE_URL" || env == "CONFIG_CENTER_DATABASE_URL" || env == "CONFIG_CENTER_ENCRYPTION_KEY" {
+			continue
+		}
+		if value, ok := values[env]; ok {
+			v.Set(key, value)
+		}
+	}
+	var result Config
+	if err := v.UnmarshalExact(&result); err != nil {
+		return Config{}, fmt.Errorf("decode configuration center values: %w", err)
+	}
+	if result.Server.Address == "" {
+		result.Server.Address = fmt.Sprintf("%s:%d", result.Server.Host, result.Server.Port)
+	}
+	if err := Validate(result); err != nil {
+		return Config{}, fmt.Errorf("validate configuration center values: %w", err)
+	}
+	return result, nil
+}
+
+func validateBootstrapDatabaseURL(value string) error {
+	u, err := url.Parse(value)
+	if err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") || u.Host == "" || u.User == nil {
+		return errors.New("DATABASE_URL must be a PostgreSQL URL with host and credentials")
+	}
+	return nil
+}
 func resolvePath(args []string) (string, bool, error) {
 	fs := flag.NewFlagSet("server", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -127,6 +184,7 @@ func resolvePath(args []string) (string, bool, error) {
 }
 func envBindings() map[string]string {
 	return map[string]string{
+		"bootstrap.databaseUrl": "DATABASE_URL", "bootstrap.encryptionKey": "CONFIG_CENTER_ENCRYPTION_KEY",
 		"app.environment": "APP_ENV", "app.listenAddr": "LISTEN_ADDR", "app.publicWebOrigin": "PUBLIC_WEB_ORIGIN", "app.apiOrigin": "API_ORIGIN", "app.primaryDomain": "PRIMARY_DOMAIN", "app.testDomainSuffix": "TEST_DOMAIN_SUFFIX", "app.redisUrl": "REDIS_URL",
 		"server.host": "SERVER_HOST", "server.port": "SERVER_PORT", "server.address": "LISTEN_ADDR", "server.readTimeout": "SERVER_READ_TIMEOUT", "server.writeTimeout": "SERVER_WRITE_TIMEOUT", "server.idleTimeout": "SERVER_IDLE_TIMEOUT", "server.shutdownTimeout": "SERVER_SHUTDOWN_TIMEOUT",
 		"database.driver": "DATABASE_DRIVER", "database.host": "DATABASE_HOST", "database.port": "DATABASE_PORT", "database.name": "DATABASE_NAME", "database.user": "DATABASE_USER", "database.password": "DATABASE_PASSWORD", "database.sslMode": "DATABASE_SSL_MODE",

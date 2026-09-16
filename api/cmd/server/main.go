@@ -61,22 +61,46 @@ func main() {
 	if cfg.App.Environment != buildEnvironment {
 		panic(fmt.Errorf("binary build environment %q does not match config environment %q", buildEnvironment, cfg.App.Environment))
 	}
+	db, err := openDatabase(cfg)
+	if err != nil {
+		panic(err)
+	}
+	centerKey := cfg.Bootstrap.EncryptionKey
+	if centerKey == "" {
+		centerKey = cfg.Session.EncryptionKey
+	}
+	centerProtector, err := session.NewTokenProtector(centerKey)
+	if err != nil {
+		_ = db.Close()
+		panic(fmt.Errorf("configuration center protector: %w", err))
+	}
+	centerReader := configurationapplication.NewService(configurationpersistence.NewRepository(db), centerProtector)
+	centerCtx, cancelCenter := context.WithTimeout(context.Background(), 5*time.Second)
+	centerValues, err := centerReader.Resolve(centerCtx)
+	cancelCenter()
+	if err != nil {
+		_ = db.Close()
+		panic(fmt.Errorf("load configuration center: %w", err))
+	}
+	resolvedCfg, err := config.ApplyConfigurationValues(cfg, centerValues)
+	if err != nil {
+		_ = db.Close()
+		panic(err)
+	}
+	if resolvedCfg.Bootstrap.DatabaseURL != cfg.Bootstrap.DatabaseURL || resolvedCfg.Database.URL() != cfg.Database.URL() {
+		_ = db.Close()
+		db, err = openDatabase(resolvedCfg)
+		if err != nil {
+			panic(fmt.Errorf("open configuration center database: %w", err))
+		}
+	}
+	cfg = resolvedCfg
 	logger, closeLogger, err := logging.New(cfg.Log, "auth-template", cfg.App.Environment, releaseVersion)
 	if err != nil {
 		panic(err)
 	}
 	logger = logger.With(zap.String("buildId", buildID), zap.String("sourceRevision", buildRevision))
 	defer closeLogger()
-	db, err := sql.Open("pgx", cfg.Database.URL())
-	if err != nil {
-		logger.Fatal("database.open.failed", zap.Error(err))
-	}
-	pingCtx, cancelPing := context.WithTimeout(context.Background(), 5*time.Second)
-	if err := db.PingContext(pingCtx); err != nil {
-		cancelPing()
-		logger.Fatal("database.ping.failed", zap.Error(err))
-	}
-	cancelPing()
 	defer db.Close()
 	identityClient := identity.NewClient(cfg.Identity, &http.Client{Timeout: 15 * time.Second})
 	limiter, closeLimiter, err := newRateLimiter(cfg)
@@ -121,7 +145,7 @@ func main() {
 	authorizationModule := authorization.New(sessions, cfg.Session.CookieName, authorizationCache)
 	accountModule := account.New()
 	auditModule := audit.New(auditapplication.NewService(auditpersistence.NewRepository(db)))
-	configurationService := configurationapplication.NewService(configurationpersistence.NewRepository(db), protector)
+	configurationService := configurationapplication.NewService(configurationpersistence.NewRepository(db), centerProtector)
 	configurationModule := configuration.New(configurationService, func(ctx context.Context, actor, action, key string) {
 		eventID, err := session.NewID()
 		if err != nil {
@@ -258,6 +282,24 @@ func buildRouter(cfg config.Config, logger *zap.Logger, db *sql.DB, manifestRead
 		return nil, err
 	}
 	return r, nil
+}
+
+func openDatabase(cfg config.Config) (*sql.DB, error) {
+	dsn := cfg.Bootstrap.DatabaseURL
+	if dsn == "" {
+		dsn = cfg.Database.URL()
+	}
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("database.open.failed: %w", err)
+	}
+	pingCtx, cancelPing := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelPing()
+	if err := db.PingContext(pingCtx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("database.ping.failed: %w", err)
+	}
+	return db, nil
 }
 
 func newRateLimiter(cfg config.Config) (ratelimit.Limiter, func(), error) {

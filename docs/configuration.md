@@ -35,7 +35,11 @@
 
 配置中心由 `configuration_entries` 表和管理端 `/admin/configuration` 页面提供。键名必须是大写环境变量格式，例如 `DATABASE_PASSWORD`、`REDIS_URL` 或业务模块自定义的 `PAYMENT_TIMEOUT_SECONDS`。值使用会话加密密钥进行 AES-GCM 加密后保存；敏感值默认开启，列表、详情和审计事件均不返回明文。
 
-管理端读取配置需要 `configuration:read`，新增、替换和删除需要 `configuration:write`。修改会记录 `SECURITY_CONFIGURATION_CHANGED` 审计事件。配置中心使用数据库连接作为 bootstrap 依赖，因此数据库连接本身必须仍能由启动配置或显式环境变量建立；配置中心值在进程运行期间可由业务模块读取，涉及宿主基础设施（例如数据库连接池、Redis 客户端）的变更在下一次启动时生效。
+管理端读取配置需要 `configuration:read`，新增、替换和删除需要 `configuration:write`。修改会记录 `SECURITY_CONFIGURATION_CHANGED` 审计事件。配置中心使用数据库连接和独立的加密密钥作为 bootstrap 依赖，因此这两项不能同时依赖配置中心本身。推荐只在部署环境中保留 `DATABASE_URL`（或 `CONFIG_CENTER_DATABASE_URL`）和 `CONFIG_CENTER_ENCRYPTION_KEY`，其余框架配置从配置中心加载。为兼容现有部署，未提供 `CONFIG_CENTER_ENCRYPTION_KEY` 时会暂时使用启动配置中的 `SESSION_ENCRYPTION_KEY` 解密配置中心；完成迁移后应补充独立的配置中心密钥。
+
+服务启动时先使用 bootstrap 数据库连接读取并解密配置中心，再覆盖框架支持的环境变量并重新构建数据库、Redis、身份客户端、Session、日志和 HTTP 依赖。支持的框架变量包括 `DATABASE_URL`、`DATABASE_*`、`REDIS_URL`、`IDENTITY_*`、`SESSION_*`、`ALLOWED_ORIGINS`、`LOG_*`、`RATE_LIMIT_*`、`METRICS_TOKEN` 等。`APP_ENV`、`APP_VERSION`、`APP_CONFIG_FILE`、`CONFIG_CENTER_DATABASE_URL` 和 `CONFIG_CENTER_ENCRYPTION_KEY` 属于部署/构建/bootstrap 边界，不允许由配置中心改变。
+
+配置中心值在进程启动时生效；涉及宿主基础设施（例如数据库连接池、Redis 客户端）的变更必须重启服务。若配置中心值无法解密或校验失败，服务拒绝启动，不使用不安全的部分配置继续运行。
 
 业务模块通过宿主注入的 `application.ConfigurationProvider` 调用 `Get(ctx, key)` 读取值，不得读取环境变量、配置文件或配置中心数据库，也不得把配置中心接口暴露给浏览器。不存在的键和解密失败都按配置缺失处理，由业务决定是否使用安全默认值或拒绝启动。
 

@@ -54,7 +54,7 @@ make run ENV=production ACTION=migrate
 
 ## 后台部署引导
 
-管理后台的“部署引导”页面对应框架 API `GET /v1/admin/deployment/guide`，需要 `admin:access` 和 `deployment:read`。接口只返回应用版本、Build ID、bootstrap 是否已配置、配置中心是否在启动阶段加载、数据库连通性、配置中心表和迁移状态，不返回数据库 URL、密码、Token、Session 密钥或其他敏感值。
+管理后台的“部署与配置中心”页面对应框架 API `GET /v1/admin/deployment/guide`，需要 `admin:access` 和 `deployment:read`。页面同时承载部署检查、框架环境变量写入和配置中心入口；旧地址 `/admin/configuration` 继续作为兼容地址。接口只返回应用版本、Build ID、bootstrap 是否已配置、配置中心是否在启动阶段加载、数据库连通性、配置中心表和迁移状态，不返回数据库 URL、密码、Token、Session 密钥或其他敏感值。
 
 发布后应先打开部署引导页面确认所有检查为“正常”，再继续配置业务 Key。若配置中心迁移或数据表检查失败，应先执行 `make run ENV=<environment> ACTION=migrate`，不得通过页面绕过迁移或直接修改数据库结构。数据库、Redis、身份平台和 Session 等基础设施配置修改后，仍需按本文件的受控重启流程生效。
 

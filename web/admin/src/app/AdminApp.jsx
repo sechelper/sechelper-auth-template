@@ -27,6 +27,7 @@ const frameworkRoutePermissions = {
   "/admin/audit-events": "audit:read",
   "/admin/resources": "admin:access",
   "/admin/deployment": "deployment:read",
+  "/admin/configuration": "deployment:read",
 };
 
 function Page({ pathname, session, hasPermission }) {
@@ -43,7 +44,7 @@ function Page({ pathname, session, hasPermission }) {
   if (pathname === "/admin/permissions") return <PermissionsPage />;
   if (pathname === "/admin/audit-events") return <AuditPage />;
   if (pathname === "/admin/resources") return <ResourcesPage />;
-  if (pathname === "/admin/deployment") return <DeploymentGuidePage />;
+  if (pathname === "/admin/deployment" || pathname === "/admin/configuration") return <DeploymentGuidePage />;
   return <NotFoundPage />;
 }
 

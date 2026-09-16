@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { dashboardApi } from "./api.js";
 import { ErrorState, Loading, PageHeader } from "../../app/components.jsx";
 import { request } from "../auth/api.js";
+import { DeploymentStatusPanels } from "../deployment/DeploymentStatusPanels.jsx";
 
 const dependencyLabels = { api: "API 服务", postgres: "PostgreSQL", redis: "Redis", manifest: "权限 Manifest" };
 const statusLabels = { healthy: "正常", degraded: "降级", unavailable: "不可用", not_configured: "未配置", not_synced: "未同步", consistent: "一致", applied: "已应用" };
@@ -137,7 +138,7 @@ function ResourceGauge({ label, percent, detail, trend, color }) {
   </article>;
 }
 
-export function DashboardPage() {
+export function DashboardPage({ session }) {
   const [data, setData] = useState(null);
   const [resourceData, setResourceData] = useState(null);
   const [resourceHistory, setResourceHistory] = useState(emptyResourceHistory);
@@ -293,5 +294,6 @@ export function DashboardPage() {
         {accessResult && <div className={`decision-result ${accessResult.allowed ? "allowed" : "denied"}`}><strong>{accessResult.allowed ? "允许访问" : "拒绝访问"}</strong><span>原因：{accessResult.reasonCode}</span>{accessResult.permission && <span>所需权限：{accessResult.permission}</span>}</div>}
       </section>
     </div>
+    {session?.permissions?.includes("deployment:read") && <DeploymentStatusPanels />}
   </div>;
 }

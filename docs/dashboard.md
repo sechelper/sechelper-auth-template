@@ -18,7 +18,7 @@
 
 `GET /v1/admin/dashboard/resources` 使用相同的 Session 与 `admin:access` 权限，仅返回最新资源快照，不探测依赖或查询业务数据。服务端以 500ms 周期采样；页面同样每 500ms 请求该轻量接口，并在浏览器保留最近 60 个不同采样点（约 30 秒）绘制 CPU 与内存趋势。磁盘使用率和 Goroutines 展示最新数值，不绘制趋势线。资源接口临时失败时，页面保留最近一次成功快照与 CPU/内存曲线并自动重试；首次采样尚未就绪时显示等待状态。概览页的访问控制诊断表单调用 `POST /v1/admin/access-decisions/check`。页面不聚合业务指标。
 
-依赖状态包括 `healthy`、`degraded`、`unavailable`、`not_configured` 和 `not_synced`。依赖探测使用短超时，单个依赖失败不会导致 Dashboard 整体失败。
+依赖状态包括 `healthy`、`degraded`、`unavailable`、`not_configured` 和 `not_synced`。依赖探测使用短超时，单个依赖失败不会导致 Dashboard 整体失败。具备 `deployment:read` 权限的管理员还会在概览页看到部署版本信息、Bootstrap 配置、配置中心和框架检查状态；这组卡片读取 `GET /v1/admin/deployment/guide`，加载失败时不影响概览的其他内容。
 
 ## 前端边界
 

@@ -347,6 +347,71 @@ paths:
                     type: object
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/admin/configuration:
+    get:
+      operationId: listConfigurationEntries
+      summary: List configuration-center entries
+      security: [{ sessionCookie: [] }]
+      x-required-permission: configuration:read
+      responses:
+        '200':
+          description: Configuration metadata; values are never returned by this endpoint
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/ConfigurationEntry' } }
+                  meta: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/admin/configuration/{key}:
+    parameters:
+      - in: path
+        name: key
+        required: true
+        schema: { type: string, pattern: '^[A-Z][A-Z0-9_]{0,127}$' }
+    get:
+      operationId: getConfigurationEntry
+      summary: Read configuration metadata
+      security: [{ sessionCookie: [] }]
+      x-required-permission: configuration:read
+      responses:
+        '200': { description: Entry metadata; secret values are blank }
+        '404': { description: Entry not found }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      operationId: upsertConfigurationEntry
+      summary: Create or replace an encrypted configuration value
+      security: [{ sessionCookie: [] }]
+      x-required-permission: configuration:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: { type: string, minLength: 1, writeOnly: true }
+                description: { type: string }
+                isSecret: { type: boolean, default: true }
+      responses:
+        '200': { description: Entry metadata }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      operationId: deleteConfigurationEntry
+      summary: Delete a configuration value
+      security: [{ sessionCookie: [] }]
+      x-required-permission: configuration:write
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /v1/admin/operations/overview:
     get:
       operationId: getOperationsOverview
@@ -412,6 +477,11 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
+    BadRequest:
+      description: Request validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
   schemas:
     SessionResponse:
       type: object
@@ -434,6 +504,17 @@ components:
           type: array
           items: { type: string }
         expiresAt: { type: string, format: date-time }
+    ConfigurationEntry:
+      type: object
+      required: [key, isSecret, version, updatedAt]
+      properties:
+        key: { type: string }
+        description: { type: string }
+        isSecret: { type: boolean }
+        version: { type: integer, format: int64 }
+        updatedBy: { type: string }
+        updatedAt: { type: string, format: date-time }
+        value: { type: string, description: Only present for non-secret reads; secret values are never returned. }
     VersionResponse:
       type: object
       required: [data]

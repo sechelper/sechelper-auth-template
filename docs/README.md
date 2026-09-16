@@ -8,6 +8,7 @@
 - [授权与 Manifest](authorization.md)
 - [授权框架维护](authorization-framework-maintenance.md)
 - [配置](configuration.md)
+- [配置中心接入](configuration-center-integration.md)
 - [开发规范](development-standards.md)
 - [部署](deployment.md)
 - [统一认证平台集成](integrations.md)

@@ -25,6 +25,9 @@ import (
 	authorizationapplication "sechelper-auth-template/api/internal/modules/authorization/application"
 	authorizationdomain "sechelper-auth-template/api/internal/modules/authorization/domain"
 	authorizationpersistence "sechelper-auth-template/api/internal/modules/authorization/persistence"
+	"sechelper-auth-template/api/internal/modules/configuration"
+	configurationapplication "sechelper-auth-template/api/internal/modules/configuration/application"
+	configurationpersistence "sechelper-auth-template/api/internal/modules/configuration/persistence"
 	"sechelper-auth-template/api/internal/modules/dashboard"
 	dashboardapplication "sechelper-auth-template/api/internal/modules/dashboard/application"
 	"sechelper-auth-template/api/internal/modules/manifest"
@@ -118,6 +121,14 @@ func main() {
 	authorizationModule := authorization.New(sessions, cfg.Session.CookieName, authorizationCache)
 	accountModule := account.New()
 	auditModule := audit.New(auditapplication.NewService(auditpersistence.NewRepository(db)))
+	configurationService := configurationapplication.NewService(configurationpersistence.NewRepository(db), protector)
+	configurationModule := configuration.New(configurationService, func(ctx context.Context, actor, action, key string) {
+		eventID, err := session.NewID()
+		if err != nil {
+			return
+		}
+		_ = auditModule.Service.Record(ctx, plataudit.Event{ID: "evt-" + eventID, EventType: "SECURITY_CONFIGURATION_CHANGED", Outcome: "success", ActorSubject: actor, ApplicationCode: cfg.Identity.ApplicationCode, ResourceType: "configuration", ResourceID: key, Action: action, Source: "admin_ui"})
+	})
 	authService.SetAuditRecorder(auditModule.Service)
 	authorizationModule.ResourceHandler.SetDecisionRecorder(func(ctx context.Context, actor authorizationdomain.Context, decision authorizationdomain.Decision, requestID string) {
 		result := "denied"
@@ -171,6 +182,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("business registration failed", zap.Error(err))
 	}
+	businessRuntime.SetConfiguration(configurationModule.Provider())
 	if err := businessRuntime.RegisterPermissions(manifestModule); err != nil {
 		logger.Fatal("business permission registration failed", zap.Error(err))
 	}
@@ -191,7 +203,7 @@ func main() {
 	}
 	stopManifestSync := manifestSync.Start(context.Background(), cfg.Manifest.SyncInterval)
 	defer stopManifestSync()
-	router, err := buildRouter(cfg, logger, db, func() bool { return manifestReady }, limiter, serviceMetrics, authhttp.NewHandler(authService, cfg.Session, cfg.App.PublicWebOrigin), authorizationModule, manifestModule, dashboardModule, accountModule, auditModule, operationsModule, businessRuntime)
+	router, err := buildRouter(cfg, logger, db, func() bool { return manifestReady }, limiter, serviceMetrics, authhttp.NewHandler(authService, cfg.Session, cfg.App.PublicWebOrigin), authorizationModule, manifestModule, dashboardModule, accountModule, auditModule, operationsModule, configurationModule, businessRuntime)
 	if err != nil {
 		logger.Fatal("http routes registration failed", zap.Error(err))
 	}
@@ -211,7 +223,7 @@ func main() {
 	logger.Info("server.stopped")
 }
 
-func buildRouter(cfg config.Config, logger *zap.Logger, db *sql.DB, manifestReady func() bool, limiter ratelimit.Limiter, serviceMetrics *appmetrics.Metrics, authHandler *authhttp.Handler, authorizationModule *authorization.Module, manifestModule *manifest.Module, dashboardModule *dashboard.Module, accountModule *account.Module, auditModule *audit.Module, operationsModule *operations.Module, businessRuntime *businessRuntime) (*gin.Engine, error) {
+func buildRouter(cfg config.Config, logger *zap.Logger, db *sql.DB, manifestReady func() bool, limiter ratelimit.Limiter, serviceMetrics *appmetrics.Metrics, authHandler *authhttp.Handler, authorizationModule *authorization.Module, manifestModule *manifest.Module, dashboardModule *dashboard.Module, accountModule *account.Module, auditModule *audit.Module, operationsModule *operations.Module, configurationModule *configuration.Module, businessRuntime *businessRuntime) (*gin.Engine, error) {
 	if cfg.App.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -240,6 +252,7 @@ func buildRouter(cfg config.Config, logger *zap.Logger, db *sql.DB, manifestRead
 	authorizationModule.RegisterResourceRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"))
 	auditModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("audit:read"))
 	operationsModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"))
+	configurationModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermissions("admin:access", "configuration:read"), authorizationModule.Middleware.RequirePermissions("admin:access", "configuration:write"))
 	manifestModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermissions("admin:access", "auth:manifest:read"), authorizationModule.Middleware.RequirePermissions("admin:access", "auth:manifest:sync"))
 	if err := businessRuntime.RegisterRoutes(v1, authorizationModule.Middleware); err != nil {
 		return nil, err
@@ -321,6 +334,12 @@ func registerFrameworkPermissions(m *manifest.Module) error {
 		return err
 	}
 	if err := m.Register(domain.Permission{Code: "audit:read", Name: "查看操作审计", Description: "查看管理端操作审计记录", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/admin/audit-events"}}}); err != nil {
+		return err
+	}
+	if err := m.Register(domain.Permission{Code: "configuration:read", Name: "查看配置中心", Description: "查看配置中心中的环境变量元数据", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/admin/configuration"}, {Method: "GET", Path: "/v1/admin/configuration/{key}"}}}); err != nil {
+		return err
+	}
+	if err := m.Register(domain.Permission{Code: "configuration:write", Name: "修改配置中心", Description: "新增、替换或删除配置中心值", RiskLevel: "critical", APIs: []domain.API{{Method: "PUT", Path: "/v1/admin/configuration/{key}"}, {Method: "DELETE", Path: "/v1/admin/configuration/{key}"}}}); err != nil {
 		return err
 	}
 	return m.Register(domain.Permission{Code: "auth:manifest:sync", Name: "同步认证 Manifest", Description: "触发本 Application 的 Manifest 同步", RiskLevel: "critical", APIs: []domain.API{{Method: "POST", Path: "/v1/internal/authorization-manifest/sync"}}})

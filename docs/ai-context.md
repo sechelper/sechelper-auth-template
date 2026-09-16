@@ -4,6 +4,7 @@
 
 - Go 组合根：`api/cmd/server/main.go`
 - 配置：`api/internal/platform/config/`
+- 配置中心：`api/internal/modules/configuration/`；业务模块使用宿主注入的 `application.ConfigurationProvider`
 - 统一认证客户端：`api/internal/platform/identity/`
 - 会话：`api/internal/platform/session/`
 - 认证用例：`api/internal/modules/authentication/application/`

@@ -31,4 +31,12 @@
 
 日志字段配置位于 `log` 分组：`mode` 支持 `file` 和 `stdout`，`encoding` 固定为 `json`；`timeKey`、`levelKey`、`messageKey`、`callerKey`、`stacktraceKey` 控制 Zap 的标准字段名，时间编码为 `iso8601`，级别编码为 `lowercase`。`development`、`disableCaller`、`disableStacktrace` 和 `sampling` 只控制 Zap 的诊断行为，不能关闭脱敏、输出限制、轮转或保留策略；`debug` 是服务端诊断开关，不能由请求输入控制。
 
+## 配置中心
+
+配置中心由 `configuration_entries` 表和管理端 `/admin/configuration` 页面提供。键名必须是大写环境变量格式，例如 `DATABASE_PASSWORD`、`REDIS_URL` 或业务模块自定义的 `PAYMENT_TIMEOUT_SECONDS`。值使用会话加密密钥进行 AES-GCM 加密后保存；敏感值默认开启，列表、详情和审计事件均不返回明文。
+
+管理端读取配置需要 `configuration:read`，新增、替换和删除需要 `configuration:write`。修改会记录 `SECURITY_CONFIGURATION_CHANGED` 审计事件。配置中心使用数据库连接作为 bootstrap 依赖，因此数据库连接本身必须仍能由启动配置或显式环境变量建立；配置中心值在进程运行期间可由业务模块读取，涉及宿主基础设施（例如数据库连接池、Redis 客户端）的变更在下一次启动时生效。
+
+业务模块通过宿主注入的 `application.ConfigurationProvider` 调用 `Get(ctx, key)` 读取值，不得读取环境变量、配置文件或配置中心数据库，也不得把配置中心接口暴露给浏览器。不存在的键和解密失败都按配置缺失处理，由业务决定是否使用安全默认值或拒绝启动。
+
 相对 `log.output` 路径以服务二进制所在目录为基准，因此默认文件是二进制旁的 `logs/app.log`，日志目录权限为 `0700`、文件权限为 `0600`。文件按日期轮转，并同时受 `retentionDays` 与 `maxAgeDays` 中较短的期限、以及 `maxBackups` 数量限制；超过 `maxSizeMB` 也会提前轮转，`compress: true` 会压缩已轮转文件。进程退出时会 flush 日志。日志不得包含密码、token、Cookie、Authorization header、私钥、完整环境变量或不受限个人数据。

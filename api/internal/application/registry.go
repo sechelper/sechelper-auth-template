@@ -3,6 +3,7 @@
 package application
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/gin-gonic/gin"
@@ -26,6 +27,12 @@ type RouteAuthorizer interface {
 	RequirePermissions(...string) gin.HandlerFunc
 }
 
+// ConfigurationProvider is the only supported business-module configuration
+// boundary. Values are resolved by the host; modules never read env or storage.
+type ConfigurationProvider interface {
+	Get(context.Context, string) (string, bool)
+}
+
 // BusinessModule is the server-side extension protocol. It keeps module code
 // behind host-provided contracts while letting the host assemble permissions,
 // resource definitions, audit event types, and protected routes consistently.
@@ -36,6 +43,7 @@ type BusinessModule interface {
 	RegisterAuditEvents(AuditRegistrar) error
 	RegisterRoutes(*gin.RouterGroup, RouteAuthorizer) error
 }
+type ConfigurationAware interface{ SetConfiguration(ConfigurationProvider) }
 
 type Registry struct{ modules []BusinessModule }
 
@@ -55,6 +63,14 @@ func (r *Registry) Add(module BusinessModule) error {
 }
 
 func (r *Registry) Modules() []BusinessModule { return append([]BusinessModule(nil), r.modules...) }
+
+func (r *Registry) SetConfiguration(provider ConfigurationProvider) {
+	for _, module := range r.modules {
+		if aware, ok := module.(ConfigurationAware); ok {
+			aware.SetConfiguration(provider)
+		}
+	}
+}
 
 func (r *Registry) RegisterPermissions(registrar PermissionRegistrar) error {
 	for _, module := range r.modules {

@@ -15,6 +15,9 @@ import (
 // outside the configured deployment boundary. Forwarded headers are accepted
 // only from explicitly trusted proxy networks.
 func HostOriginPolicy(cfg config.Config) gin.HandlerFunc {
+	if cfg.Bootstrap.InstallMode {
+		return func(c *gin.Context) { c.Next() }
+	}
 	allowedHosts := map[string]struct{}{originHost(cfg.App.APIOrigin): {}, originHost(cfg.App.PublicWebOrigin): {}}
 	trusted := parseCIDRs(cfg.Security.TrustedProxyCIDRs)
 	return func(c *gin.Context) {

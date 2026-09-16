@@ -30,12 +30,12 @@ import (
 	configurationpersistence "sechelper-auth-template/api/internal/modules/configuration/persistence"
 	"sechelper-auth-template/api/internal/modules/dashboard"
 	dashboardapplication "sechelper-auth-template/api/internal/modules/dashboard/application"
+	"sechelper-auth-template/api/internal/modules/installation"
 	"sechelper-auth-template/api/internal/modules/manifest"
 	manifestapplication "sechelper-auth-template/api/internal/modules/manifest/application"
 	"sechelper-auth-template/api/internal/modules/manifest/domain"
 	manifestpersistence "sechelper-auth-template/api/internal/modules/manifest/persistence"
 	"sechelper-auth-template/api/internal/modules/operations"
-	"sechelper-auth-template/api/internal/modules/installation"
 	operationsapplication "sechelper-auth-template/api/internal/modules/operations/application"
 	plataudit "sechelper-auth-template/api/internal/platform/audit"
 	"sechelper-auth-template/api/internal/platform/config"
@@ -111,7 +111,11 @@ func main() {
 	defer closeLimiter()
 	serviceMetrics := &appmetrics.Metrics{}
 	sessions := session.NewPostgresStore(db)
-	protector, err := session.NewTokenProtector(cfg.Session.EncryptionKey)
+	protectorKey := cfg.Session.EncryptionKey
+	if protectorKey == "" && cfg.Bootstrap.InstallMode {
+		protectorKey = centerKey
+	}
+	protector, err := session.NewTokenProtector(protectorKey)
 	if err != nil {
 		logger.Fatal("session.protector.failed", zap.Error(err))
 	}

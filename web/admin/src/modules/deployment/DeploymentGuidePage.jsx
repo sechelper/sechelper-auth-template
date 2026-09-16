@@ -65,7 +65,7 @@ export function DeploymentGuidePage() {
   };
 
   return <>
-    <PageHeader code="PLATFORM" title="配置中心" description="填写框架环境变量并保存到配置中心。部署状态和版本信息位于概览页面。" />
+    <PageHeader code="PLATFORM" title="框架配置" description="填写框架环境变量并保存到配置中心。部署状态和版本信息位于概览页面。" />
     <section className="deployment-variable-card card">
       <div className="deployment-guide-card-heading"><div><h2>框架环境变量</h2><p>填写后将加密保存到配置中心；空字段跳过，已有敏感值不会回显。</p></div></div>
       {saved && <div className="deployment-save-success" role="status">{saved}</div>}

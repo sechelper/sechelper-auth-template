@@ -228,7 +228,7 @@ export function DashboardPage({ session }) {
   return <div className="platform-overview-page">
     <PageHeader code="PLATFORM OVERVIEW" title="平台总览" description="查看应用健康、依赖服务、服务器资源与授权同步情况。" />
 
-    <section className="platform-app-banner card" aria-label="应用信息与依赖状态" style={{ display: "block" }}>
+    <section className="platform-app-banner card" aria-label="应用信息">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "2rem", flexWrap: "wrap" }}>
         <div className="platform-app-copy">
           <span className="eyebrow">APPLICATION</span>
@@ -239,14 +239,19 @@ export function DashboardPage({ session }) {
           <span className="health-dot" />{unhealthy ? "系统需关注" : "系统运行正常"}
         </div>
       </div>
-      <div style={{ marginTop: "1rem", paddingTop: ".75rem", borderTop: "1px solid var(--sneat-border)" }}>
-        <div className="platform-system-facts">
-          <div><span>运行时长</span><strong>{formatUptime(app.startedAt)}</strong></div>
-          <div><span>最近检查</span><strong>{formatDateTime(checkedAt)}</strong></div>
-        </div>
-        <div className="platform-dependency-grid">
-          {dependencies.map(([name, value]) => <HealthCard key={name} name={name} value={value} />)}
-        </div>
+      <div className="platform-system-facts">
+        <div><span>运行时长</span><strong>{formatUptime(app.startedAt)}</strong></div>
+        <div><span>最近检查</span><strong>{formatDateTime(checkedAt)}</strong></div>
+      </div>
+    </section>
+
+    <section className="platform-dependencies-card card" aria-label="依赖服务">
+      <div className="platform-section-heading">
+        <div><span className="eyebrow">DEPENDENCIES</span><h2>依赖服务</h2><p>查看 API、数据库、缓存和权限同步服务状态。</p></div>
+        <span className={`status-pill ${unhealthy ? "health-warning" : "health-ok"}`}>{unhealthy ? "需要关注" : "全部正常"}</span>
+      </div>
+      <div className="platform-dependency-grid">
+        {dependencies.map(([name, value]) => <HealthCard key={name} name={name} value={value} />)}
       </div>
     </section>
 

@@ -425,7 +425,11 @@ tbody tr:hover { background: rgba(105,108,255,.035); }
   --platform-result-denied-bg: rgba(255,62,29,.16);
 }
 .platform-overview-page .platform-app-banner { display: flex; align-items: center; justify-content: space-between; gap: 2rem; margin-bottom: 1.25rem; padding: 1.75rem 2rem; border-left: .25rem solid var(--sneat-primary); }
-.platform-dependencies-card { margin-bottom: 1.25rem; padding: 1.25rem 1.5rem; }
+.platform-dependencies-status { margin-bottom: 1.25rem; }
+.platform-dependencies-status .platform-section-heading { margin-bottom: .9rem; padding: 0 .25rem .8rem; border-bottom: 1px solid var(--sneat-border); }
+.platform-dependencies-status .platform-dependency-grid { margin: 0; padding: 1.25rem 1.5rem; border-radius: var(--sneat-radius); background: var(--sneat-paper); box-shadow: var(--sneat-shadow); }
+.deployment-overview-status { display: grid; gap: 1.25rem; margin-top: 1.25rem; }
+.deployment-overview-status .deployment-guide-card { margin: 0; }
 .platform-dependencies-card .platform-section-heading { margin-bottom: .7rem; padding-bottom: .8rem; border-bottom: 1px solid var(--sneat-border); }
 .platform-dependencies-card .platform-dependency-grid { margin-top: 0; }
 .platform-app-copy { min-width: 0; }

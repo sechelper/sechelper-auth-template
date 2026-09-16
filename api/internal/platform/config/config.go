@@ -75,6 +75,7 @@ type LogConfig struct {
 type BootstrapConfig struct {
 	DatabaseURL   string `mapstructure:"databaseUrl"`
 	EncryptionKey string `mapstructure:"encryptionKey"`
+	InstallKey    string `mapstructure:"installKey"`
 }
 
 func Load(args ...string) (Config, error) {
@@ -184,7 +185,7 @@ func resolvePath(args []string) (string, bool, error) {
 }
 func envBindings() map[string]string {
 	return map[string]string{
-		"bootstrap.databaseUrl": "DATABASE_URL", "bootstrap.encryptionKey": "CONFIG_CENTER_ENCRYPTION_KEY",
+		"bootstrap.databaseUrl": "DATABASE_URL", "bootstrap.encryptionKey": "CONFIG_CENTER_ENCRYPTION_KEY", "bootstrap.installKey": "CONFIG_CENTER_INSTALL_KEY",
 		"app.environment": "APP_ENV", "app.listenAddr": "LISTEN_ADDR", "app.publicWebOrigin": "PUBLIC_WEB_ORIGIN", "app.apiOrigin": "API_ORIGIN", "app.primaryDomain": "PRIMARY_DOMAIN", "app.testDomainSuffix": "TEST_DOMAIN_SUFFIX", "app.redisUrl": "REDIS_URL",
 		"server.host": "SERVER_HOST", "server.port": "SERVER_PORT", "server.address": "LISTEN_ADDR", "server.readTimeout": "SERVER_READ_TIMEOUT", "server.writeTimeout": "SERVER_WRITE_TIMEOUT", "server.idleTimeout": "SERVER_IDLE_TIMEOUT", "server.shutdownTimeout": "SERVER_SHUTDOWN_TIMEOUT",
 		"database.driver": "DATABASE_DRIVER", "database.host": "DATABASE_HOST", "database.port": "DATABASE_PORT", "database.name": "DATABASE_NAME", "database.user": "DATABASE_USER", "database.password": "DATABASE_PASSWORD", "database.sslMode": "DATABASE_SSL_MODE",

@@ -13,6 +13,10 @@ export function AuthProvider({ children }) {
     } catch { setState({ status: "error", retryable: true }); }
   };
   useEffect(() => {
+    if (window.location.pathname.replace(/\/$/, "") === "/install") {
+      setState({ status: "install" });
+      return undefined;
+    }
     let cancelled = false;
     async function initialize() {
       try {

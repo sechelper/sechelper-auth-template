@@ -244,9 +244,7 @@ export function DashboardPage({ session }) {
       </div>
     </section>
 
-    <DeploymentStatusPanels />
-
-    <section className="platform-dependencies-card card" aria-label="依赖服务">
+    <section className="platform-dependencies-status" aria-label="依赖服务">
       <div className="platform-section-heading">
         <div><span className="eyebrow">DEPENDENCIES</span><h2>依赖服务</h2><p>查看 API、数据库、缓存和权限同步服务状态。</p></div>
         <span className={`status-pill ${unhealthy ? "health-warning" : "health-ok"}`}>{unhealthy ? "需要关注" : "全部正常"}</span>
@@ -255,6 +253,8 @@ export function DashboardPage({ session }) {
         {dependencies.map(([name, value]) => <HealthCard key={name} name={name} value={value} />)}
       </div>
     </section>
+
+    <DeploymentStatusPanels />
 
     <div className="platform-lower-grid">
       <section className="card platform-resource-card" aria-labelledby="platform-resource-title">

@@ -3,6 +3,7 @@ import { useAuth } from "../auth/AuthProvider.jsx";
 import { authApi, restoreLoginPath } from "../auth/api.js";
 import { GlobalErrorPage } from "../../../shared/error-pages/GlobalErrorPage.jsx";
 import { publicBusinessRoutes, validatePublicBusinessModules } from "./public-business-modules.js";
+import { InstallPage } from "../pages/install/InstallPage.jsx";
 
 validatePublicBusinessModules();
 
@@ -29,6 +30,7 @@ export function App() {
   if (pathname === "/403") return <GlobalErrorPage code={403} />;
   if (pathname === "/404") return <GlobalErrorPage code={404} />;
   if (pathname === "/500") return <GlobalErrorPage code={500} onAction={refresh} />;
+  if (pathname === "/install") return <InstallPage />;
   if (businessRoute) {
     const BusinessPage = businessRoute.element;
     return <BusinessPage auth={{ state, login, silentLogin, logout, refresh, refreshSession }} />;

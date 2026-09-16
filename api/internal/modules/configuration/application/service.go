@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"regexp"
@@ -11,6 +12,13 @@ import (
 
 var keyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,127}$`)
 var ErrNotFound = errors.New("configuration entry not found")
+
+const InstallationMarker = "FRAMEWORK_INSTALLATION_COMPLETE"
+
+type InstallEntry struct {
+	Key, Description, Value string
+	IsSecret                bool
+}
 
 type Repository interface {
 	List(context.Context) ([]domain.Entry, error)
@@ -80,4 +88,32 @@ func (s *Service) Delete(ctx context.Context, key string) error {
 		return errors.New("invalid key")
 	}
 	return s.repository.Delete(ctx, strings.TrimSpace(key))
+}
+
+func (s *Service) IsInstalled(ctx context.Context) (bool, error) {
+	value, err := s.Get(ctx, InstallationMarker)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return value.Value == "true", nil
+}
+
+func (s *Service) Install(ctx context.Context, entries []InstallEntry, actor string) error {
+	installed, err := s.IsInstalled(ctx)
+	if err != nil {
+		return err
+	}
+	if installed {
+		return errors.New("configuration center is already installed")
+	}
+	for _, entry := range entries {
+		if _, err := s.Upsert(ctx, entry.Key, entry.Description, entry.IsSecret, entry.Value, actor); err != nil {
+			return err
+		}
+	}
+	_, err = s.Upsert(ctx, InstallationMarker, "framework installation marker", false, "true", actor)
+	return err
 }

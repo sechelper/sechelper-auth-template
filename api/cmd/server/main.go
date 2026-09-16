@@ -35,6 +35,7 @@ import (
 	"sechelper-auth-template/api/internal/modules/manifest/domain"
 	manifestpersistence "sechelper-auth-template/api/internal/modules/manifest/persistence"
 	"sechelper-auth-template/api/internal/modules/operations"
+	"sechelper-auth-template/api/internal/modules/installation"
 	operationsapplication "sechelper-auth-template/api/internal/modules/operations/application"
 	plataudit "sechelper-auth-template/api/internal/platform/audit"
 	"sechelper-auth-template/api/internal/platform/config"
@@ -153,6 +154,7 @@ func main() {
 		}
 		_ = auditModule.Service.Record(ctx, plataudit.Event{ID: "evt-" + eventID, EventType: "SECURITY_CONFIGURATION_CHANGED", Outcome: "success", ActorSubject: actor, ApplicationCode: cfg.Identity.ApplicationCode, ResourceType: "configuration", ResourceID: key, Action: action, Source: "admin_ui"})
 	})
+	installationModule := installation.New(configurationService, cfg.Bootstrap.InstallKey)
 	authService.SetAuditRecorder(auditModule.Service)
 	authorizationModule.ResourceHandler.SetDecisionRecorder(func(ctx context.Context, actor authorizationdomain.Context, decision authorizationdomain.Decision, requestID string) {
 		result := "denied"
@@ -230,7 +232,7 @@ func main() {
 	}
 	stopManifestSync := manifestSync.Start(context.Background(), cfg.Manifest.SyncInterval)
 	defer stopManifestSync()
-	router, err := buildRouter(cfg, logger, db, func() bool { return manifestReady }, limiter, serviceMetrics, authhttp.NewHandler(authService, cfg.Session, cfg.App.PublicWebOrigin), authorizationModule, manifestModule, dashboardModule, accountModule, auditModule, operationsModule, configurationModule, businessRuntime)
+	router, err := buildRouter(cfg, logger, db, func() bool { return manifestReady }, limiter, serviceMetrics, authhttp.NewHandler(authService, cfg.Session, cfg.App.PublicWebOrigin), authorizationModule, manifestModule, dashboardModule, accountModule, auditModule, operationsModule, configurationModule, installationModule, businessRuntime)
 	if err != nil {
 		logger.Fatal("http routes registration failed", zap.Error(err))
 	}
@@ -250,12 +252,13 @@ func main() {
 	logger.Info("server.stopped")
 }
 
-func buildRouter(cfg config.Config, logger *zap.Logger, db *sql.DB, manifestReady func() bool, limiter ratelimit.Limiter, serviceMetrics *appmetrics.Metrics, authHandler *authhttp.Handler, authorizationModule *authorization.Module, manifestModule *manifest.Module, dashboardModule *dashboard.Module, accountModule *account.Module, auditModule *audit.Module, operationsModule *operations.Module, configurationModule *configuration.Module, businessRuntime *businessRuntime) (*gin.Engine, error) {
+func buildRouter(cfg config.Config, logger *zap.Logger, db *sql.DB, manifestReady func() bool, limiter ratelimit.Limiter, serviceMetrics *appmetrics.Metrics, authHandler *authhttp.Handler, authorizationModule *authorization.Module, manifestModule *manifest.Module, dashboardModule *dashboard.Module, accountModule *account.Module, auditModule *audit.Module, operationsModule *operations.Module, configurationModule *configuration.Module, installationModule *installation.Module, businessRuntime *businessRuntime) (*gin.Engine, error) {
 	if cfg.App.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.New()
 	r.Use(gin.Recovery(), httpkit.RequestIDMiddleware(), platformsecurity.HostOriginPolicy(cfg), requestLogger(logger), cors(cfg.CORS.AllowedOrigins), rateLimitAuth(limiter, cfg.RateLimit, serviceMetrics))
+	installationModule.RegisterRoutes(r)
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
 	metrics := r.Group("/metrics")
 	if cfg.App.Environment == "production" {

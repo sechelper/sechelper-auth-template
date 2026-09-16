@@ -7,6 +7,7 @@ bootstrap:
   installKey: replace-with-a-one-time-install-key
 app:
   environment: development
+  listenAddr: 127.0.0.1:8080
 server:
   host: 127.0.0.1
   port: 8080

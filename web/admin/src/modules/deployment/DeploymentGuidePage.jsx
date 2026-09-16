@@ -4,9 +4,7 @@ import { configurationApi } from "../configuration/api.js";
 
 const variableDefinitions = [
   ["APP_ENV", "app.environment / APP_ENV", false, "development"], ["APP_NAME", "应用名称", false, "auth-template"],
-  ["DATABASE_URL", "数据库连接", true, "postgres://user:password@host:5432/database"], ["DATABASE_PASSWORD", "数据库密码", true, "输入数据库密码"],
-  ["POSTGRES_USER", "PostgreSQL 初始化用户", false, "app"], ["POSTGRES_PASSWORD", "PostgreSQL 初始化密码", true, "输入初始化密码"], ["POSTGRES_DB", "PostgreSQL 初始化数据库", false, "auth_template"],
-  ["SERVER_HOST", "服务监听地址", false, "0.0.0.0"], ["SERVER_PORT", "服务端口", false, "8080"], ["SERVER_READ_TIMEOUT", "读取超时", false, "10s"], ["SERVER_WRITE_TIMEOUT", "写入超时", false, "15s"], ["SERVER_IDLE_TIMEOUT", "空闲超时", false, "60s"], ["SERVER_SHUTDOWN_TIMEOUT", "关闭超时", false, "15s"], ["DATABASE_DRIVER", "数据库驱动", false, "postgres"], ["DATABASE_HOST", "数据库主机", false, "127.0.0.1"], ["DATABASE_PORT", "数据库端口", false, "5432"], ["DATABASE_NAME", "数据库名称", false, "auth_template"], ["DATABASE_USER", "数据库用户", false, "app"], ["DATABASE_SSL_MODE", "数据库 SSL 模式", false, "disable"],
+  ["SERVER_HOST", "服务监听地址", false, "0.0.0.0"], ["SERVER_PORT", "服务端口", false, "8080"], ["SERVER_READ_TIMEOUT", "读取超时", false, "10s"], ["SERVER_WRITE_TIMEOUT", "写入超时", false, "15s"], ["SERVER_IDLE_TIMEOUT", "空闲超时", false, "60s"], ["SERVER_SHUTDOWN_TIMEOUT", "关闭超时", false, "15s"],
   ["REDIS_URL", "Redis 连接", true, "redis://host:6379/0"],
   ["PUBLIC_WEB_ORIGIN", "前台域名", false, "https://example.com"],
   ["API_ORIGIN", "API 域名", false, "https://example.com"],

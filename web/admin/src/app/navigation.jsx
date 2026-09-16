@@ -7,6 +7,7 @@ export const menu = [
   { path: "/admin/permissions", label: "权限清单", icon: "permissions", section: "账号与安全", sectionOrder: 100, permission: "auth:manifest:read" },
   { path: "/admin/resources", label: "资源目录", icon: "resources", section: "账号与安全", sectionOrder: 100, permission: "admin:access" },
   { path: "/admin/audit-events", label: "操作审计", icon: "audit", section: "监控与审计", sectionOrder: 200, permission: "audit:read" },
+  { path: "/admin/deployment", label: "部署引导", icon: "deployment", section: "系统设置", sectionOrder: 300, permission: "deployment:read" },
 ];
 
 const iconPaths = {
@@ -18,6 +19,7 @@ const iconPaths = {
   profile: ["M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M4 21a8 8 0 0 1 16 0"],
   audit: ["M8 4h8", "M9 2h6v4H9z", "M6 4H4v17h16V4h-2", "M8 11h8", "M8 16h5"],
   operations: ["M3 12h4l2-5 4 10 2-5h6", "M12 3a9 9 0 1 1-8.5 6"],
+  deployment: ["M12 3l7 3v5c0 4.5-2.9 8-7 10-4.1-2-7-5.5-7-10V6z", "m9 12 2 2 4-4"],
 };
 
 export function NavIcon({ name }) {

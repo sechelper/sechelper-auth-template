@@ -7,6 +7,7 @@ import { ManifestPage } from "../modules/permissions/ManifestPage.jsx";
 import { PermissionsPage } from "../modules/permissions/PermissionsPage.jsx";
 import { AuditPage } from "../modules/audit/AuditPage.jsx";
 import { ResourcesPage } from "../modules/access/ResourcesPage.jsx";
+import { DeploymentGuidePage } from "../modules/deployment/DeploymentGuidePage.jsx";
 import { GlobalErrorPage } from "../../../shared/error-pages/GlobalErrorPage.jsx";
 import { adminBusinessRoutes, adminBusinessNavigation, validateAdminBusinessModules } from "./admin-business-modules.js";
 import { filterMenuByPermission, validateBusinessMenuSections } from "./menu-model.js";
@@ -25,6 +26,7 @@ const frameworkRoutePermissions = {
   "/admin/permissions": "auth:manifest:read",
   "/admin/audit-events": "audit:read",
   "/admin/resources": "admin:access",
+  "/admin/deployment": "deployment:read",
 };
 
 function Page({ pathname, session, hasPermission }) {
@@ -41,6 +43,7 @@ function Page({ pathname, session, hasPermission }) {
   if (pathname === "/admin/permissions") return <PermissionsPage />;
   if (pathname === "/admin/audit-events") return <AuditPage />;
   if (pathname === "/admin/resources") return <ResourcesPage />;
+  if (pathname === "/admin/deployment") return <DeploymentGuidePage />;
   return <NotFoundPage />;
 }
 

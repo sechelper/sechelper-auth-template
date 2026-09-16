@@ -52,6 +52,12 @@ make run ENV=production ACTION=migrate
 
 应用配置字段见 `config.example.yaml`，Docker/Compose 变量见 `.env.example`。真实配置由 `config.yaml` 或部署环境注入；Identity Client Secret、access token 和数据库凭据不进入 Git、镜像或前端构建产物。Manifest 同步复用 `IDENTITY_CLIENT_ID/IDENTITY_CLIENT_SECRET` 获取 Bearer access token，不再配置独立的 Manifest 凭据。
 
+## 后台部署引导
+
+管理后台的“部署引导”页面对应框架 API `GET /v1/admin/deployment/guide`，需要 `admin:access` 和 `deployment:read`。接口只返回应用版本、Build ID、bootstrap 是否已配置、配置中心是否在启动阶段加载、数据库连通性、配置中心表和迁移状态，不返回数据库 URL、密码、Token、Session 密钥或其他敏感值。
+
+发布后应先打开部署引导页面确认所有检查为“正常”，再继续配置业务 Key。若配置中心迁移或数据表检查失败，应先执行 `make run ENV=<environment> ACTION=migrate`，不得通过页面绕过迁移或直接修改数据库结构。数据库、Redis、身份平台和 Session 等基础设施配置修改后，仍需按本文件的受控重启流程生效。
+
 ## 前后台发布
 
 前台位于 `web/`，构建到 `web/dist`；后台位于 `web/admin/`，构建到 `web/admin/dist`。两个目录仍是独立 Vite 项目，各自执行依赖安装和生产构建。生产镜像由 `deploy/Dockerfile.web` 将两个构建产物分别复制到 `/usr/share/nginx/html` 和 `/usr/share/nginx/html/admin`。Nginx 必须将 `/admin/` 回退到后台 `index.html`，根路径回退到前台 `index.html`。

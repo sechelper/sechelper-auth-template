@@ -422,6 +422,22 @@ paths:
         '200': { description: Operations overview }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/admin/deployment/guide:
+    get:
+      operationId: getDeploymentGuide
+      summary: Read framework deployment readiness
+      description: Returns non-secret bootstrap, configuration-center, migration, dependency, and build readiness checks. It never returns passwords, tokens, encryption keys, or connection strings.
+      security: [{ sessionCookie: [] }]
+      x-required-permission: deployment:read
+      responses:
+        '200':
+          description: Deployment readiness guide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentGuideResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /v1/internal/authorization-manifest:
     get:
       operationId: getManifestState
@@ -515,6 +531,35 @@ components:
         updatedBy: { type: string }
         updatedAt: { type: string, format: date-time }
         value: { type: string, description: Only present for non-secret reads; secret values are never returned. }
+    DeploymentGuideResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [application, bootstrap, configuration, checks, ready]
+          properties:
+            application:
+              type: object
+              required: [name, version, environment, buildId, sourceRevision, startedAt]
+              properties:
+                name: { type: string }
+                version: { type: string }
+                environment: { type: string, enum: [development, test, production] }
+                buildId: { type: string }
+                sourceRevision: { type: string }
+                startedAt: { type: string, format: date-time }
+            bootstrap: { type: array, items: { $ref: '#/components/schemas/DeploymentCheck' } }
+            configuration: { type: array, items: { $ref: '#/components/schemas/DeploymentCheck' } }
+            checks: { type: array, items: { $ref: '#/components/schemas/DeploymentCheck' } }
+            ready: { type: boolean }
+    DeploymentCheck:
+      type: object
+      required: [name, status]
+      properties:
+        name: { type: string }
+        status: { type: string, enum: [healthy, attention, unavailable] }
+        message: { type: string }
     VersionResponse:
       type: object
       required: [data]

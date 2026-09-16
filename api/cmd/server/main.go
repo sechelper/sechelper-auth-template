@@ -198,7 +198,10 @@ func main() {
 	resourceCollector := dashboardapplication.NewSystemResourcesCollector(".", dashboardapplication.DefaultResourceSampleInterval)
 	defer resourceCollector.Close()
 	dashboardModule := dashboard.New(dashboardapplication.NewService(db, dashboardapplication.AppInfo{Name: cfg.App.Name, Version: releaseVersion, Environment: cfg.App.Environment, BuildID: buildID, SourceRevision: buildRevision, StartedAt: startedAt}, dashboardManifestReader, cachePinger, resourceCollector))
-	operationsModule := operations.New(operationsapplication.NewService(db, operationsapplication.AppInfo{Name: cfg.App.Name, Version: releaseVersion, Environment: cfg.App.Environment, BuildID: buildID, SourceRevision: buildRevision, StartedAt: startedAt}, serviceMetrics))
+	appInfo := operationsapplication.AppInfo{Name: cfg.App.Name, Version: releaseVersion, Environment: cfg.App.Environment, BuildID: buildID, SourceRevision: buildRevision, StartedAt: startedAt}
+	operationsService := operationsapplication.NewService(db, appInfo, serviceMetrics)
+	operationsService.SetDeploymentInfo(operationsapplication.DeploymentInfo{App: appInfo, BootstrapDatabaseConfigured: cfg.Bootstrap.DatabaseURL != "", BootstrapEncryptionConfigured: cfg.Bootstrap.EncryptionKey != "", ConfigurationLoaded: true})
+	operationsModule := operations.New(operationsService)
 	if err := registerFrameworkPermissions(manifestModule); err != nil {
 		logger.Fatal("manifest registration failed", zap.Error(err))
 	}
@@ -275,7 +278,7 @@ func buildRouter(cfg config.Config, logger *zap.Logger, db *sql.DB, manifestRead
 	accountModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("auth:session"))
 	authorizationModule.RegisterResourceRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"))
 	auditModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("audit:read"))
-	operationsModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"))
+	operationsModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"), authorizationModule.Middleware.RequirePermissions("admin:access", "deployment:read"))
 	configurationModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermissions("admin:access", "configuration:read"), authorizationModule.Middleware.RequirePermissions("admin:access", "configuration:write"))
 	manifestModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermissions("admin:access", "auth:manifest:read"), authorizationModule.Middleware.RequirePermissions("admin:access", "auth:manifest:sync"))
 	if err := businessRuntime.RegisterRoutes(v1, authorizationModule.Middleware); err != nil {
@@ -382,6 +385,9 @@ func registerFrameworkPermissions(m *manifest.Module) error {
 		return err
 	}
 	if err := m.Register(domain.Permission{Code: "configuration:write", Name: "修改配置中心", Description: "新增、替换或删除配置中心值", RiskLevel: "critical", APIs: []domain.API{{Method: "PUT", Path: "/v1/admin/configuration/{key}"}, {Method: "DELETE", Path: "/v1/admin/configuration/{key}"}}}); err != nil {
+		return err
+	}
+	if err := m.Register(domain.Permission{Code: "deployment:read", Name: "查看部署引导", Description: "查看框架部署前检查和配置中心接入状态", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/admin/deployment/guide"}}}); err != nil {
 		return err
 	}
 	return m.Register(domain.Permission{Code: "auth:manifest:sync", Name: "同步认证 Manifest", Description: "触发本 Application 的 Manifest 同步", RiskLevel: "critical", APIs: []domain.API{{Method: "POST", Path: "/v1/internal/authorization-manifest/sync"}}})

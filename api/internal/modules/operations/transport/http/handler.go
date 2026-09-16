@@ -18,3 +18,7 @@ func (h *Handler) Overview(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"data": gin.H{"application": gin.H{"name": value.App.Name, "version": value.App.Version, "environment": value.App.Environment, "buildId": value.App.BuildID, "sourceRevision": value.App.SourceRevision, "startedAt": value.App.StartedAt.UTC().Format(time.RFC3339)}, "dependencies": dependencies, "metrics": value.Metrics}})
 }
+
+func (h *Handler) DeploymentGuide(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"data": h.service.DeploymentGuide(c.Request.Context())})
+}

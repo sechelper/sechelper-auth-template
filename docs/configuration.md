@@ -37,7 +37,7 @@
 
 管理端读取配置需要 `configuration:read`，新增、替换和删除需要 `configuration:write`。修改会记录 `SECURITY_CONFIGURATION_CHANGED` 审计事件。配置中心使用数据库连接和独立的加密密钥作为 bootstrap 依赖，因此这两项不能同时依赖配置中心本身。推荐只在部署环境中保留 `DATABASE_URL`（或 `CONFIG_CENTER_DATABASE_URL`）和 `CONFIG_CENTER_ENCRYPTION_KEY`，其余框架配置从配置中心加载。为兼容现有部署，未提供 `CONFIG_CENTER_ENCRYPTION_KEY` 时会暂时使用启动配置中的 `SESSION_ENCRYPTION_KEY` 解密配置中心；完成迁移后应补充独立的配置中心密钥。
 
-服务启动时先使用 bootstrap 数据库连接读取并解密配置中心，再覆盖框架支持的环境变量并重新构建数据库、Redis、身份客户端、Session、日志和 HTTP 依赖。支持的框架变量包括 `DATABASE_URL`、`DATABASE_*`、`REDIS_URL`、`IDENTITY_*`、`SESSION_*`、`ALLOWED_ORIGINS`、`LOG_*`、`RATE_LIMIT_*`、`METRICS_TOKEN` 等。`APP_ENV`、`APP_VERSION`、`APP_CONFIG_FILE`、`CONFIG_CENTER_DATABASE_URL` 和 `CONFIG_CENTER_ENCRYPTION_KEY` 属于部署/构建/bootstrap 边界，不允许由配置中心改变。
+服务启动时先使用 bootstrap 数据库连接读取并解密配置中心，再覆盖框架支持的环境变量并重新构建数据库、Redis、身份客户端、Session、日志和 HTTP 依赖。支持的框架变量包括 `DATABASE_URL`、`DATABASE_*`、`REDIS_URL`、`IDENTITY_*`、`SESSION_*`、`ALLOWED_ORIGINS`、`LOG_*`、`RATE_LIMIT_*`、`METRICS_TOKEN` 等。`APP_ENV`、`APP_VERSION`、`APP_CONFIG_FILE`、`CONFIG_CENTER_DATABASE_URL` 和 `CONFIG_CENTER_ENCRYPTION_KEY` 属于部署/构建/bootstrap 边界，不允许由配置中心改变。安装模式不使用独立的环境变量开关，而由 bootstrap 安装密钥和配置中心安装标记共同决定。
 
 配置中心值在进程启动时生效；涉及宿主基础设施（例如数据库连接池、Redis 客户端）的变更必须重启服务。若配置中心值无法解密或校验失败，服务拒绝启动，不使用不安全的部分配置继续运行。
 

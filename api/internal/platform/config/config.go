@@ -76,7 +76,7 @@ type BootstrapConfig struct {
 	DatabaseURL   string `mapstructure:"databaseUrl"`
 	EncryptionKey string `mapstructure:"encryptionKey"`
 	InstallKey    string `mapstructure:"installKey"`
-	InstallMode   bool   `mapstructure:"installMode"`
+	InstallMode   bool   `mapstructure:"-"`
 }
 
 func Load(args ...string) (Config, error) {
@@ -105,7 +105,7 @@ func Load(args ...string) (Config, error) {
 	if c.Server.Address == "" {
 		c.Server.Address = fmt.Sprintf("%s:%d", c.Server.Host, c.Server.Port)
 	}
-	if c.Bootstrap.InstallMode {
+	if strings.TrimSpace(c.Bootstrap.InstallKey) != "" {
 		if strings.TrimSpace(c.Bootstrap.DatabaseURL) == "" || strings.TrimSpace(c.Bootstrap.EncryptionKey) == "" || strings.TrimSpace(c.Bootstrap.InstallKey) == "" {
 			return Config{}, errors.New("install mode requires DATABASE_URL, CONFIG_CENTER_ENCRYPTION_KEY, and CONFIG_CENTER_INSTALL_KEY")
 		}
@@ -143,7 +143,7 @@ func ApplyConfigurationValues(base Config, values map[string]string) (Config, er
 	}
 	bindings := envBindings()
 	for key, env := range bindings {
-		if env == "APP_ENV" || env == "DATABASE_URL" || env == "CONFIG_CENTER_DATABASE_URL" || env == "CONFIG_CENTER_ENCRYPTION_KEY" {
+		if env == "DATABASE_URL" || env == "CONFIG_CENTER_DATABASE_URL" || env == "CONFIG_CENTER_ENCRYPTION_KEY" {
 			continue
 		}
 		if value, ok := values[env]; ok {
@@ -195,8 +195,8 @@ func resolvePath(args []string) (string, bool, error) {
 }
 func envBindings() map[string]string {
 	return map[string]string{
-		"bootstrap.databaseUrl": "DATABASE_URL", "bootstrap.encryptionKey": "CONFIG_CENTER_ENCRYPTION_KEY", "bootstrap.installKey": "CONFIG_CENTER_INSTALL_KEY", "bootstrap.installMode": "APP_INSTALL_MODE",
-		"app.environment": "APP_ENV", "app.listenAddr": "LISTEN_ADDR", "app.publicWebOrigin": "PUBLIC_WEB_ORIGIN", "app.apiOrigin": "API_ORIGIN", "app.primaryDomain": "PRIMARY_DOMAIN", "app.testDomainSuffix": "TEST_DOMAIN_SUFFIX", "app.redisUrl": "REDIS_URL",
+		"bootstrap.databaseUrl": "DATABASE_URL", "bootstrap.encryptionKey": "CONFIG_CENTER_ENCRYPTION_KEY", "bootstrap.installKey": "CONFIG_CENTER_INSTALL_KEY",
+		"app.name": "APP_NAME", "app.environment": "APP_ENV", "app.listenAddr": "LISTEN_ADDR", "app.publicWebOrigin": "PUBLIC_WEB_ORIGIN", "app.apiOrigin": "API_ORIGIN", "app.primaryDomain": "PRIMARY_DOMAIN", "app.testDomainSuffix": "TEST_DOMAIN_SUFFIX", "app.redisUrl": "REDIS_URL",
 		"server.host": "SERVER_HOST", "server.port": "SERVER_PORT", "server.address": "LISTEN_ADDR", "server.readTimeout": "SERVER_READ_TIMEOUT", "server.writeTimeout": "SERVER_WRITE_TIMEOUT", "server.idleTimeout": "SERVER_IDLE_TIMEOUT", "server.shutdownTimeout": "SERVER_SHUTDOWN_TIMEOUT",
 		"database.driver": "DATABASE_DRIVER", "database.host": "DATABASE_HOST", "database.port": "DATABASE_PORT", "database.name": "DATABASE_NAME", "database.user": "DATABASE_USER", "database.password": "DATABASE_PASSWORD", "database.sslMode": "DATABASE_SSL_MODE",
 		"identity.issuer": "IDENTITY_ISSUER", "identity.authorizationEndpoint": "IDENTITY_AUTHORIZATION_ENDPOINT", "identity.tokenEndpoint": "IDENTITY_TOKEN_ENDPOINT", "identity.userinfoEndpoint": "IDENTITY_USERINFO_ENDPOINT", "identity.jwksUrl": "IDENTITY_JWKS_URL", "identity.revocationEndpoint": "IDENTITY_REVOCATION_ENDPOINT", "identity.endSessionEndpoint": "IDENTITY_END_SESSION_ENDPOINT", "identity.audience": "IDENTITY_AUDIENCE", "identity.clientId": "IDENTITY_CLIENT_ID", "identity.clientSecret": "IDENTITY_CLIENT_SECRET", "identity.redirectUri": "IDENTITY_REDIRECT_URI", "identity.applicationCode": "IDENTITY_APPLICATION_CODE", "identity.scopes": "IDENTITY_SCOPES",

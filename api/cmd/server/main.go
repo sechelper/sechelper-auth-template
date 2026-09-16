@@ -59,9 +59,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if cfg.App.Environment != buildEnvironment {
-		panic(fmt.Errorf("binary build environment %q does not match config environment %q", buildEnvironment, cfg.App.Environment))
-	}
 	db, err := openDatabase(cfg)
 	if err != nil {
 		panic(err)
@@ -76,6 +73,12 @@ func main() {
 		panic(fmt.Errorf("configuration center protector: %w", err))
 	}
 	centerReader := configurationapplication.NewService(configurationpersistence.NewRepository(db), centerProtector)
+	installed, err := centerReader.IsInstalled(context.Background())
+	if err != nil {
+		_ = db.Close()
+		panic(fmt.Errorf("read installation state: %w", err))
+	}
+	cfg.Bootstrap.InstallMode = !installed && cfg.Bootstrap.InstallKey != ""
 	centerCtx, cancelCenter := context.WithTimeout(context.Background(), 5*time.Second)
 	centerValues, err := centerReader.Resolve(centerCtx)
 	cancelCenter()
@@ -83,7 +86,10 @@ func main() {
 		_ = db.Close()
 		panic(fmt.Errorf("load configuration center: %w", err))
 	}
-	resolvedCfg, err := config.ApplyConfigurationValues(cfg, centerValues)
+	resolvedCfg := cfg
+	if installed {
+		resolvedCfg, err = config.ApplyConfigurationValues(cfg, centerValues)
+	}
 	if err != nil {
 		_ = db.Close()
 		panic(err)
@@ -96,6 +102,9 @@ func main() {
 		}
 	}
 	cfg = resolvedCfg
+	if !cfg.Bootstrap.InstallMode && cfg.App.Environment != buildEnvironment {
+		panic(fmt.Errorf("binary build environment %q does not match config environment %q", buildEnvironment, cfg.App.Environment))
+	}
 	logger, closeLogger, err := logging.New(cfg.Log, "auth-template", cfg.App.Environment, releaseVersion)
 	if err != nil {
 		panic(err)
@@ -158,7 +167,7 @@ func main() {
 		}
 		_ = auditModule.Service.Record(ctx, plataudit.Event{ID: "evt-" + eventID, EventType: "SECURITY_CONFIGURATION_CHANGED", Outcome: "success", ActorSubject: actor, ApplicationCode: cfg.Identity.ApplicationCode, ResourceType: "configuration", ResourceID: key, Action: action, Source: "admin_ui"})
 	})
-	installationModule := installation.New(configurationService, cfg.Bootstrap.InstallKey)
+	installationModule := installation.New(configurationService, cfg.Bootstrap.InstallKey, centerProtector)
 	authService.SetAuditRecorder(auditModule.Service)
 	authorizationModule.ResourceHandler.SetDecisionRecorder(func(ctx context.Context, actor authorizationdomain.Context, decision authorizationdomain.Decision, requestID string) {
 		result := "denied"

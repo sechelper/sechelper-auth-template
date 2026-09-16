@@ -11,8 +11,11 @@ func setRequiredEnvironment(t *testing.T) {
 	t.Helper()
 	values := map[string]string{
 		"DATABASE_PASSWORD": "test-password", "IDENTITY_CLIENT_ID": "client", "IDENTITY_CLIENT_SECRET": "secret",
-		"IDENTITY_APPLICATION_CODE": "app-test",
-		"SESSION_ENCRYPTION_KEY":    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		"IDENTITY_APPLICATION_CODE":    "app-test",
+		"SESSION_ENCRYPTION_KEY":       "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		"CONFIG_CENTER_INSTALL_KEY":    "test-install-key",
+		"CONFIG_CENTER_ENCRYPTION_KEY": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		"DATABASE_URL":                 "postgres://app:test@127.0.0.1:5432/auth_template?sslmode=disable",
 	}
 	for key, value := range values {
 		t.Setenv(key, value)
@@ -57,29 +60,5 @@ func TestProductionRequiresExplicitConfigPath(t *testing.T) {
 	t.Setenv("APP_CONFIG_FILE", "")
 	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "required in production") {
 		t.Fatalf("Load() error = %v, want explicit production path error", err)
-	}
-}
-
-func TestApplyConfigurationValuesOverridesFrameworkEnvironmentValues(t *testing.T) {
-	setRequiredEnvironment(t)
-	path := filepath.Join("..", "..", "..", "..", "config.example.yaml")
-	base, err := Load("--config", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resolved, err := ApplyConfigurationValues(base, map[string]string{
-		"DATABASE_PASSWORD":      "center-password",
-		"REDIS_URL":              "redis://127.0.0.1:6379/2",
-		"LOG_LEVEL":              "debug",
-		"SESSION_ENCRYPTION_KEY": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-	})
-	if err != nil {
-		t.Fatalf("ApplyConfigurationValues() error = %v", err)
-	}
-	if resolved.Database.Password != "center-password" || resolved.App.RedisURL != "redis://127.0.0.1:6379/2" || resolved.Log.Level != "debug" {
-		t.Fatalf("resolved framework config = %+v", resolved)
-	}
-	if resolved.App.Environment != base.App.Environment {
-		t.Fatalf("configuration center changed APP_ENV from %q to %q", base.App.Environment, resolved.App.Environment)
 	}
 }

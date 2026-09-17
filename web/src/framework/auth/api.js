@@ -92,6 +92,10 @@ export function restoreLoginPath() {
 		const path = window.sessionStorage.getItem(loginPathKey);
 		window.sessionStorage.removeItem(loginPathKey);
 		if (path && path.startsWith("/") && !path.startsWith("//") && path !== "/") {
+			if (/^\/admin(?:\/|$)/.test(path)) {
+				window.location.assign(path);
+				return;
+			}
 			window.history.replaceState({}, "", path);
 			window.dispatchEvent(new PopStateEvent("popstate"));
 		}

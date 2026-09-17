@@ -8,6 +8,7 @@ import (
 	configurationapplication "sechelper-auth-template/api/internal/modules/configuration/application"
 	"sechelper-auth-template/api/internal/platform/httpkit"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -82,6 +83,14 @@ func (m *Module) install(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": gin.H{"installed": true, "saved": len(input.Entries), "restartRequired": true}})
+	go m.restartProcess()
+}
+
+func (m *Module) restartProcess() {
+	timer := time.NewTimer(250 * time.Millisecond)
+	defer timer.Stop()
+	<-timer.C
+	_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
 }
 
 var errInstallLocked = errors.New("installation lock already exists")

@@ -32,7 +32,7 @@ func (h *Handler) List(c *gin.Context) {
 	for _, value := range values {
 		data = append(data, mapOrder(value))
 	}
-	c.JSON(http.StatusOK, gin.H{"data": data, "meta": gin.H{"hasMore": len(data) == limit}})
+	httpkit.WriteCollection(c, data, gin.H{"count": len(data), "pageSize": limit})
 }
 func (h *Handler) Get(c *gin.Context) {
 	value, err := h.service.Get(c.Request.Context(), c.Param("orderId"))
@@ -44,7 +44,7 @@ func (h *Handler) Get(c *gin.Context) {
 		writeError(c, http.StatusBadGateway, "ORDER_QUERY_FAILED")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": mapOrder(value)})
+	httpkit.WriteData(c, http.StatusOK, mapOrder(value))
 }
 
 type orderResponse struct {

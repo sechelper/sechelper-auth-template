@@ -1,7 +1,38 @@
 import { apiOrigin } from "../../platform/config/runtime.js";
+
 let csrfToken = "";
+let refreshInFlight = null;
 const loginPathKey = "auth-template.login-path";
+const silentLoginAttemptKey = "auth-template.silent-login-attempt";
 const explicitLogoutKey = "auth-template.explicit-logout";
-export function markExplicitLogout() { try { window.sessionStorage.setItem(explicitLogoutKey, "1"); } catch { /* storage is optional */ } }
-export async function request(path, options = {}) { const response = await fetch(`${apiOrigin()}${path}`, { credentials: "include", ...options, headers: { "Content-Type": "application/json", ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}), ...(options.headers || {}) } }); csrfToken = response.headers.get("X-CSRF-Token") || csrfToken; const body = await response.json().catch(() => ({})); if (!response.ok) throw Object.assign(new Error(body?.error?.message || "请求失败"), { code: body?.error?.code, status: response.status }); return body; }
-export const authApi = { session: () => request("/v1/auth/session"), account: () => request("/v1/account/me"), authorization: () => request("/v1/authorization/me"), refresh: () => request("/v1/auth/refresh", { method: "POST" }), logout: () => request("/v1/auth/logout", { method: "POST" }), login: () => { try { window.sessionStorage.setItem(loginPathKey, `${window.location.pathname}${window.location.search}${window.location.hash}`); } catch { /* storage is optional */ } window.location.assign(`${apiOrigin()}/v1/auth/login`); } };
+
+export async function request(path, options = {}) {
+  const response = await fetch(`${apiOrigin()}${path}`, { credentials: "include", ...options, headers: { "Content-Type": "application/json", ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}), ...(options.headers || {}) } });
+  csrfToken = response.headers.get("X-CSRF-Token") || csrfToken;
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(body?.error?.message || "请求失败"), { code: body?.error?.code, status: response.status });
+  return body;
+}
+
+export const authApi = {
+  session: () => request("/v1/auth/session"),
+  account: () => request("/v1/account/me"),
+  authorization: () => request("/v1/authorization/me"),
+  refresh: () => { if (!refreshInFlight) refreshInFlight = request("/v1/auth/refresh", { method: "POST" }).finally(() => { refreshInFlight = null; }); return refreshInFlight; },
+  logout: () => request("/v1/auth/logout", { method: "POST" }),
+  login: ({ prompt = "login", preservePath = true } = {}) => {
+    if (prompt === "login") clearExplicitLogout();
+    if (preservePath) { try { window.sessionStorage.setItem(loginPathKey, `${window.location.pathname}${window.location.search}${window.location.hash}`); } catch { /* storage is optional */ } }
+    window.location.assign(`${apiOrigin()}/v1/auth/login?prompt=${encodeURIComponent(prompt)}`);
+  },
+};
+
+export function markExplicitLogout() { try { window.sessionStorage.setItem(explicitLogoutKey, "1"); window.localStorage.setItem(explicitLogoutKey, String(Date.now())); } catch { /* storage is optional */ } }
+export function clearExplicitLogout() { try { window.sessionStorage.removeItem(explicitLogoutKey); window.localStorage.removeItem(explicitLogoutKey); } catch { /* storage is optional */ } }
+export function hasExplicitLogout() { try { return window.sessionStorage.getItem(explicitLogoutKey) === "1"; } catch { return false; } }
+export function markSilentLoginAttempt() { try { window.sessionStorage.setItem(silentLoginAttemptKey, "1"); } catch { /* storage is optional */ } }
+export function consumeSilentLoginAttempt() { try { const attempted = window.sessionStorage.getItem(silentLoginAttemptKey) === "1"; window.sessionStorage.removeItem(silentLoginAttemptKey); return attempted; } catch { return false; } }
+export function hasSilentLoginFailure() { return new URLSearchParams(window.location.search).get("auth") === "login-required"; }
+export function clearAuthStatus() { const url = new URL(window.location.href); if (!url.searchParams.has("auth")) return; url.searchParams.delete("auth"); window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`); }
+export function subscribeToAuthChanges(onChange) { const handler = (event) => { if (event.key === explicitLogoutKey && event.newValue) onChange({ type: "logout" }); }; window.addEventListener("storage", handler); return () => window.removeEventListener("storage", handler); }
+export function restoreLoginPath() { try { const path = window.sessionStorage.getItem(loginPathKey); window.sessionStorage.removeItem(loginPathKey); if (path && path.startsWith("/") && !path.startsWith("//") && /^\/admin(?:\/|$)/.test(path)) { window.history.replaceState({}, "", path); window.dispatchEvent(new PopStateEvent("popstate")); } } catch { /* storage is optional */ } }

@@ -1,62 +1,55 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { authApi, clearAuthStatus, consumeInteractiveLoginAttempt, consumeSilentLoginAttempt, hasExplicitLogout, hasSilentLoginFailure, markExplicitLogout, markSilentLoginAttempt } from "./api.js";
+import { authApi, clearAuthStatus, consumeInteractiveLoginAttempt, consumeSilentLoginAttempt, hasExplicitLogout, hasSilentLoginFailure, markExplicitLogout, markSilentLoginAttempt, subscribeToAuthChanges } from "./api.js";
 import { oidcAccountURL } from "../config/runtime.js";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [state, setState] = useState({ status: "loading" });
-  const refresh = async () => {
-    try {
-      const value = await authApi.session();
-      if (!value.authenticated) { setState({ status: "unauthenticated" }); return; }
-      setState({ status: "authenticated", ...value });
-    } catch { setState({ status: "error", retryable: true }); }
+  const loadAuthenticated = async () => {
+    const session = await authApi.session();
+    if (!session.authenticated) return { status: "unauthenticated" };
+    const account = await authApi.account();
+    return { status: "authenticated", ...session, user: account.data };
   };
+  const refresh = async () => {
+    try { setState(await loadAuthenticated()); } catch { setState({ status: "error", retryable: true }); }
+  };
+
   useEffect(() => {
-    if (window.location.pathname.replace(/\/$/, "") === "/install") {
-      setState({ status: "install" });
-      return undefined;
-    }
+    if (window.location.pathname.replace(/\/$/, "") === "/install") { setState({ status: "install" }); return undefined; }
     let cancelled = false;
     async function initialize() {
       try {
         const value = await authApi.session();
         if (cancelled) return;
         if (value.authenticated) {
-          consumeInteractiveLoginAttempt();
-          consumeSilentLoginAttempt();
+          consumeInteractiveLoginAttempt(); consumeSilentLoginAttempt();
           const account = await authApi.account();
-          setState({ status: "authenticated", ...value, user: account.data });
+          if (!cancelled) setState({ status: "authenticated", ...value, user: account.data });
           return;
         }
-        if (hasExplicitLogout()) {
-          clearAuthStatus();
-          setState({ status: "unauthenticated" });
-          return;
-        }
-        if (consumeInteractiveLoginAttempt()) {
-          clearAuthStatus();
-          setState({ status: "unauthenticated" });
-          return;
-        }
-        const silentLoginFailed = hasSilentLoginFailure();
-        const silentLoginWasAttempted = consumeSilentLoginAttempt();
-        if (!silentLoginFailed && !silentLoginWasAttempted) {
-          markSilentLoginAttempt();
-          authApi.login({ prompt: "none" });
-          return;
-        }
-        clearAuthStatus();
-        setState({ status: "unauthenticated" });
-      } catch {
-        if (!cancelled) setState({ status: "error", retryable: true });
-      }
+        if (hasExplicitLogout() || consumeInteractiveLoginAttempt()) { clearAuthStatus(); setState({ status: "unauthenticated" }); return; }
+        const silentAttempted = consumeSilentLoginAttempt();
+        if (!hasSilentLoginFailure() && !silentAttempted) { markSilentLoginAttempt(); authApi.login({ prompt: "none" }); return; }
+        clearAuthStatus(); setState({ status: "unauthenticated" });
+      } catch { if (!cancelled) setState({ status: "error", retryable: true }); }
     }
     initialize();
-    return () => { cancelled = true; };
+    const unsubscribe = subscribeToAuthChanges(() => { if (!cancelled) setState({ status: "unauthenticated" }); });
+    return () => { cancelled = true; unsubscribe(); };
   }, []);
-  const value = useMemo(() => ({ state, user: state.user || null, login: authApi.login, silentLogin: () => { markSilentLoginAttempt(); authApi.login({ prompt: "none" }); }, refreshSession: async () => { await authApi.refresh(); await refresh(); }, logout: async () => { const result = await authApi.logout(); markExplicitLogout(); if (result.logoutUrl) { window.location.assign(result.logoutUrl); return; } setState({ status: "unauthenticated" }); }, userCenterURL: () => oidcAccountURL(), refresh }), [state]);
+
+  const value = useMemo(() => ({
+    state,
+    user: state.user || null,
+    login: authApi.login,
+    silentLogin: () => { markSilentLoginAttempt(); authApi.login({ prompt: "none" }); },
+    refresh,
+    refreshSession: async () => { setState((current) => ({ ...current, status: "refreshing" })); try { await authApi.refresh(); await refresh(); } catch (error) { setState({ status: error?.status === 401 ? "reauthentication_required" : "error", retryable: true }); } },
+    logout: async () => { const result = await authApi.logout(); markExplicitLogout(); if (result.logoutUrl) { window.location.assign(result.logoutUrl); return; } setState({ status: "unauthenticated" }); },
+    userCenterURL: () => oidcAccountURL(),
+  }), [state]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

@@ -1,6 +1,7 @@
 import { apiOrigin } from "../config/runtime.js";
 
 let csrfToken = "";
+let refreshInFlight = null;
 const loginPathKey = "auth-template.login-path";
 const silentLoginAttemptKey = "auth-template.silent-login-attempt";
 const explicitLogoutKey = "auth-template.explicit-logout";
@@ -21,14 +22,14 @@ export async function request(path, options = {}) {
 export const authApi = {
   session: () => request("/v1/auth/session"),
   account: () => request("/v1/account/me"),
-  refresh: () => request("/v1/auth/refresh", { method: "POST" }),
+  refresh: () => { if (!refreshInFlight) refreshInFlight = request("/v1/auth/refresh", { method: "POST" }).finally(() => { refreshInFlight = null; }); return refreshInFlight; },
   logout: () => request("/v1/auth/logout", { method: "POST" }),
   logoutCallback: (state) => request(`/v1/auth/logout/callback?state=${encodeURIComponent(state)}`),
 	login: ({ prompt = "login", preservePath = true } = {}) => {
 		if (prompt === "login") {
 			try {
 				window.sessionStorage.removeItem(silentLoginAttemptKey);
-				window.sessionStorage.removeItem(explicitLogoutKey);
+				clearExplicitLogout();
 				window.sessionStorage.setItem(interactiveLoginAttemptKey, "1");
 			} catch { /* storage is optional */ }
 		}
@@ -50,7 +51,17 @@ export function markSilentLoginAttempt() {
 }
 
 export function markExplicitLogout() {
-	try { window.sessionStorage.setItem(explicitLogoutKey, "1"); } catch { /* storage is optional */ }
+	try { window.sessionStorage.setItem(explicitLogoutKey, "1"); window.localStorage.setItem(explicitLogoutKey, String(Date.now())); } catch { /* storage is optional */ }
+}
+
+export function clearExplicitLogout() {
+	try { window.sessionStorage.removeItem(explicitLogoutKey); window.localStorage.removeItem(explicitLogoutKey); } catch { /* storage is optional */ }
+}
+
+export function subscribeToAuthChanges(onChange) {
+	const handler = (event) => { if (event.key === explicitLogoutKey && event.newValue) onChange({ type: "logout" }); };
+	window.addEventListener("storage", handler);
+	return () => window.removeEventListener("storage", handler);
 }
 
 export function hasExplicitLogout() {

@@ -130,13 +130,14 @@ func (h *Handler) refresh(c *gin.Context) {
 }
 
 func identityFields(value session.Session) gin.H {
-	fields := gin.H{"subject": value.Subject, "identitySubject": value.Subject}
-	if len(value.ProfileClaims) > 0 {
-		fields["profile"] = value.ProfileClaims
-		fields["nickname"] = profileNickname(value.ProfileClaims, value.Subject)
-		if picture, ok := value.ProfileClaims["picture"].(string); ok && picture != "" {
-			fields["avatarUrl"] = picture
-		}
+	fields := gin.H{
+		"subject":         value.Subject,
+		"identitySubject": value.Subject,
+		"profile":         publicProfile(value),
+		"nickname":        profileNickname(value.ProfileClaims, value.Subject),
+	}
+	if picture, ok := value.ProfileClaims["picture"].(string); ok && picture != "" {
+		fields["avatarUrl"] = picture
 	}
 	if value.PlatformUserUUID != "" {
 		fields["platformUserUuid"] = value.PlatformUserUUID
@@ -144,8 +145,24 @@ func identityFields(value session.Session) gin.H {
 	return fields
 }
 
+func publicProfile(value session.Session) map[string]any {
+	profile := map[string]any{}
+	for _, key := range []string{"sub", "email", "name", "nickname", "picture"} {
+		if item, ok := value.ProfileClaims[key].(string); ok && item != "" {
+			profile[key] = item
+		}
+	}
+	if _, ok := profile["sub"]; !ok {
+		profile["sub"] = value.Subject
+	}
+	if _, ok := profile["email"]; !ok && value.Email != "" {
+		profile["email"] = value.Email
+	}
+	return profile
+}
+
 func profileNickname(profile map[string]any, fallback string) string {
-	for _, key := range []string{"nickname", "name", "preferred_username"} {
+	for _, key := range []string{"nickname", "name"} {
 		if value, ok := profile[key].(string); ok && value != "" {
 			return value
 		}

@@ -157,7 +157,7 @@ func main() {
 	}
 	defer closeAuthorizationCache()
 	authorizationModule := authorization.New(sessions, cfg.Session.CookieName, authorizationCache)
-	accountModule := account.New(sessions, cfg.Session.CookieName)
+	accountModule := account.New(sessions, cfg.Session.CookieName, authService.Get)
 	auditModule := audit.New(auditapplication.NewService(auditpersistence.NewRepository(db)))
 	configurationService := configurationapplication.NewService(configurationpersistence.NewRepository(db), centerProtector)
 	configurationModule := configuration.New(configurationService, func(ctx context.Context, actor, action, key string) {

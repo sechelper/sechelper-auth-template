@@ -27,7 +27,7 @@ func main() {
 	}
 	dsn := cfg.Bootstrap.DatabaseURL
 	if dsn == "" {
-		dsn = cfg.Database.URL()
+		fail(fmt.Errorf("bootstrap.databaseUrl is required"))
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {

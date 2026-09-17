@@ -3,6 +3,8 @@ import { apiOrigin } from "../config/runtime.js";
 let csrfToken = "";
 const loginPathKey = "auth-template.login-path";
 const silentLoginAttemptKey = "auth-template.silent-login-attempt";
+const explicitLogoutKey = "auth-template.explicit-logout";
+const interactiveLoginAttemptKey = "auth-template.interactive-login-attempt";
 
 export async function request(path, options = {}) {
   const response = await fetch(`${apiOrigin()}${path}`, {
@@ -23,12 +25,19 @@ export const authApi = {
   logoutCallback: (state) => request(`/v1/auth/logout/callback?state=${encodeURIComponent(state)}`),
 	login: ({ prompt = "login", preservePath = true } = {}) => {
 		if (prompt === "login") {
-			try { window.sessionStorage.removeItem(silentLoginAttemptKey); } catch { /* storage is optional */ }
+			try {
+				window.sessionStorage.removeItem(silentLoginAttemptKey);
+				window.sessionStorage.removeItem(explicitLogoutKey);
+				window.sessionStorage.setItem(interactiveLoginAttemptKey, "1");
+			} catch { /* storage is optional */ }
 		}
 		if (preservePath) {
 			const path = `${window.location.pathname}${window.location.search}${window.location.hash}`;
 			if (path.startsWith("/") && !path.startsWith("//")) {
-				try { window.sessionStorage.setItem(loginPathKey, path); } catch { /* storage is optional */ }
+				try {
+					const existingPath = window.sessionStorage.getItem(loginPathKey);
+					if (path !== "/" || !existingPath || existingPath === "/") window.sessionStorage.setItem(loginPathKey, path);
+				} catch { /* storage is optional */ }
 			}
 		}
 		window.location.assign(`${apiOrigin()}/v1/auth/login?prompt=${encodeURIComponent(prompt)}`);
@@ -37,6 +46,24 @@ export const authApi = {
 
 export function markSilentLoginAttempt() {
 	try { window.sessionStorage.setItem(silentLoginAttemptKey, "1"); } catch { /* storage is optional */ }
+}
+
+export function markExplicitLogout() {
+	try { window.sessionStorage.setItem(explicitLogoutKey, "1"); } catch { /* storage is optional */ }
+}
+
+export function hasExplicitLogout() {
+	try { return window.sessionStorage.getItem(explicitLogoutKey) === "1"; } catch { return false; }
+}
+
+export function consumeInteractiveLoginAttempt() {
+	try {
+		const attempted = window.sessionStorage.getItem(interactiveLoginAttemptKey) === "1";
+		window.sessionStorage.removeItem(interactiveLoginAttemptKey);
+		return attempted;
+	} catch {
+		return false;
+	}
 }
 
 export function consumeSilentLoginAttempt() {

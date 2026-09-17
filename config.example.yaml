@@ -1,13 +1,8 @@
-# First-run bootstrap configuration.
-# Runtime variables are entered through /install and encrypted in the
-# configuration center. Keep only non-secret startup defaults here.
+# First-run application configuration.
+# Sensitive runtime variables are supplied through the deployment environment;
+# keep only non-secret startup defaults in this file.
 bootstrap:
-  databaseUrl: postgresql://app:change-me@127.0.0.1:5432/auth_template?sslmode=disable
-  encryptionKey: replace-with-43-character-base64-key
-  installKey: replace-with-a-one-time-install-key
+  installLockFile: install.lock
 app:
   environment: development
-  listenAddr: 127.0.0.1:8080
-server:
-  host: 127.0.0.1
-  port: 8080
+  listenAddr: 0.0.0.0:8080

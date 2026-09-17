@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { authApi, clearAuthStatus, consumeSilentLoginAttempt, hasSilentLoginFailure, markSilentLoginAttempt } from "./api.js";
+import { authApi, clearAuthStatus, consumeInteractiveLoginAttempt, consumeSilentLoginAttempt, hasExplicitLogout, hasSilentLoginFailure, markExplicitLogout, markSilentLoginAttempt } from "./api.js";
 
 const AuthContext = createContext(null);
 
@@ -23,8 +23,19 @@ export function AuthProvider({ children }) {
         const value = await authApi.session();
         if (cancelled) return;
         if (value.authenticated) {
+          consumeInteractiveLoginAttempt();
           consumeSilentLoginAttempt();
           setState({ status: "authenticated", ...value });
+          return;
+        }
+        if (hasExplicitLogout()) {
+          clearAuthStatus();
+          setState({ status: "unauthenticated" });
+          return;
+        }
+        if (consumeInteractiveLoginAttempt()) {
+          clearAuthStatus();
+          setState({ status: "unauthenticated" });
           return;
         }
         const silentLoginFailed = hasSilentLoginFailure();
@@ -43,7 +54,7 @@ export function AuthProvider({ children }) {
     initialize();
     return () => { cancelled = true; };
   }, []);
-  const value = useMemo(() => ({ state, login: authApi.login, silentLogin: () => { markSilentLoginAttempt(); authApi.login({ prompt: "none" }); }, refreshSession: async () => { await authApi.refresh(); await refresh(); }, logout: async () => { const result = await authApi.logout(); if (result.logoutUrl) { window.location.assign(result.logoutUrl); return; } await refresh(); }, refresh }), [state]);
+  const value = useMemo(() => ({ state, login: authApi.login, silentLogin: () => { markSilentLoginAttempt(); authApi.login({ prompt: "none" }); }, refreshSession: async () => { await authApi.refresh(); await refresh(); }, logout: async () => { const result = await authApi.logout(); markExplicitLogout(); if (result.logoutUrl) { window.location.assign(result.logoutUrl); return; } setState({ status: "unauthenticated" }); }, refresh }), [state]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

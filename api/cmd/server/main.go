@@ -94,7 +94,7 @@ func main() {
 		_ = db.Close()
 		panic(err)
 	}
-	if resolvedCfg.Bootstrap.DatabaseURL != cfg.Bootstrap.DatabaseURL || resolvedCfg.Database.URL() != cfg.Database.URL() {
+	if resolvedCfg.Bootstrap.DatabaseURL != cfg.Bootstrap.DatabaseURL {
 		_ = db.Close()
 		db, err = openDatabase(resolvedCfg)
 		if err != nil {
@@ -167,7 +167,7 @@ func main() {
 		}
 		_ = auditModule.Service.Record(ctx, plataudit.Event{ID: "evt-" + eventID, EventType: "SECURITY_CONFIGURATION_CHANGED", Outcome: "success", ActorSubject: actor, ApplicationCode: cfg.Identity.ApplicationCode, ResourceType: "configuration", ResourceID: key, Action: action, Source: "admin_ui"})
 	})
-	installationModule := installation.New(configurationService, cfg.Bootstrap.InstallKey, centerProtector)
+	installationModule := installation.New(configurationService, cfg.Bootstrap.InstallKey, cfg.Bootstrap.InstallLockFile, centerProtector)
 	authService.SetAuditRecorder(auditModule.Service)
 	authorizationModule.ResourceHandler.SetDecisionRecorder(func(ctx context.Context, actor authorizationdomain.Context, decision authorizationdomain.Decision, requestID string) {
 		result := "denied"
@@ -306,7 +306,7 @@ func buildRouter(cfg config.Config, logger *zap.Logger, db *sql.DB, manifestRead
 func openDatabase(cfg config.Config) (*sql.DB, error) {
 	dsn := cfg.Bootstrap.DatabaseURL
 	if dsn == "" {
-		dsn = cfg.Database.URL()
+		return nil, fmt.Errorf("database.open.failed: bootstrap.databaseUrl is required")
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -403,7 +403,7 @@ func registerFrameworkPermissions(m *manifest.Module) error {
 	if err := m.Register(domain.Permission{Code: "configuration:write", Name: "修改配置中心", Description: "新增、替换或删除配置中心值", RiskLevel: "critical", APIs: []domain.API{{Method: "PUT", Path: "/v1/admin/configuration/{key}"}, {Method: "DELETE", Path: "/v1/admin/configuration/{key}"}}}); err != nil {
 		return err
 	}
-	if err := m.Register(domain.Permission{Code: "deployment:read", Name: "查看部署引导", Description: "查看框架部署前检查和配置中心接入状态", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/admin/deployment/guide"}}}); err != nil {
+	if err := m.Register(domain.Permission{Code: "deployment:read", Name: "查看框架检查", Description: "查看框架运行检查和配置中心接入状态", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/admin/deployment/guide"}}}); err != nil {
 		return err
 	}
 	return m.Register(domain.Permission{Code: "auth:manifest:sync", Name: "同步认证 Manifest", Description: "触发本 Application 的 Manifest 同步", RiskLevel: "critical", APIs: []domain.API{{Method: "POST", Path: "/v1/internal/authorization-manifest/sync"}}})

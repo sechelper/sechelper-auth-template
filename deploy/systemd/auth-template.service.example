@@ -1,0 +1,17 @@
+[Unit]
+Description=SECHELPER auth-template API
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/sechelper-auth-template
+ExecStart=/opt/sechelper-auth-template/bin/auth-template --config /opt/sechelper-auth-template/config.yaml
+EnvironmentFile=/opt/sechelper-auth-template/.env
+User=order-test
+Group=order-test
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ReadWritePaths=/opt/sechelper-auth-template/logs
+
+[Install]
+WantedBy=multi-user.target

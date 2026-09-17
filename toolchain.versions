@@ -1,6 +1,0 @@
-# Exact compiler, package manager, and frontend framework versions.
-go: 1.26.8
-node: 24.21.0
-npm: 11.19.1
-react: 19.2.7
-vite: 7.1.7

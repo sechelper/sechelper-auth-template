@@ -97,6 +97,28 @@ func TestAuthorizationURLDeduplicatesConfiguredScopes(t *testing.T) {
 	}
 }
 
+func TestEndSessionURLIncludesOIDCLogoutParameters(t *testing.T) {
+	c := NewClient(config.IdentityConfig{EndSessionEndpoint: "https://issuer.example/oauth2/logout"}, http.DefaultClient)
+	raw, err := c.EndSessionURL("id-token", "https://app.example/v1/auth/logout/callback", "logout-state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := parsed.Query()
+	if query.Get("id_token_hint") != "id-token" {
+		t.Fatalf("id_token_hint = %q, want id-token", query.Get("id_token_hint"))
+	}
+	if query.Get("post_logout_redirect_uri") != "https://app.example/v1/auth/logout/callback" {
+		t.Fatalf("post_logout_redirect_uri = %q, want logout callback", query.Get("post_logout_redirect_uri"))
+	}
+	if query.Get("state") != "logout-state" {
+		t.Fatalf("state = %q, want logout-state", query.Get("state"))
+	}
+}
+
 func TestGetUserInfoPreservesAllReturnedClaims(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer user-token" {

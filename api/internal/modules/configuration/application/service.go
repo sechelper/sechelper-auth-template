@@ -15,6 +15,12 @@ var ErrNotFound = errors.New("configuration entry not found")
 
 const InstallationMarker = "FRAMEWORK_INSTALLATION_COMPLETE"
 
+var requiredInstallKeys = []string{
+	"APP_ENV", "APP_NAME", "SERVER_READ_TIMEOUT", "SERVER_WRITE_TIMEOUT", "SERVER_IDLE_TIMEOUT", "SERVER_SHUTDOWN_TIMEOUT", "PUBLIC_WEB_ORIGIN", "API_ORIGIN", "PRIMARY_DOMAIN", "TEST_DOMAIN_SUFFIX",
+	"IDENTITY_ISSUER", "IDENTITY_AUTHORIZATION_ENDPOINT", "IDENTITY_TOKEN_ENDPOINT", "IDENTITY_USERINFO_ENDPOINT", "IDENTITY_JWKS_URL", "IDENTITY_AUDIENCE", "IDENTITY_CLIENT_ID", "IDENTITY_CLIENT_SECRET", "IDENTITY_REDIRECT_URI", "IDENTITY_APPLICATION_CODE", "IDENTITY_SCOPES",
+	"MANIFEST_SYNC_INTERVAL", "SESSION_COOKIE_NAME", "SESSION_TTL", "SESSION_SECURE", "SESSION_SAME_SITE", "SESSION_ENCRYPTION_KEY", "ALLOWED_ORIGINS", "TRUSTED_PROXY_CIDRS", "METRICS_TOKEN", "RATE_LIMIT_LOGIN_PER_MINUTE", "RATE_LIMIT_CALLBACK_PER_MINUTE", "RATE_LIMIT_REFRESH_PER_MINUTE", "LOG_MODE", "LOG_LEVEL", "LOG_OUTPUT", "LOG_RETENTION_DAYS", "DEBUG",
+}
+
 type InstallEntry struct {
 	Key, Description, Value string
 	IsSecret                bool
@@ -98,7 +104,19 @@ func (s *Service) IsInstalled(ctx context.Context) (bool, error) {
 		}
 		return false, err
 	}
-	return value.Value == "true", nil
+	if value.Value != "true" {
+		return false, nil
+	}
+	values, err := s.repository.Values(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, key := range requiredInstallKeys {
+		if strings.TrimSpace(values[key]) == "" {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func (s *Service) Install(ctx context.Context, entries []InstallEntry, actor string) error {
@@ -109,6 +127,9 @@ func (s *Service) Install(ctx context.Context, entries []InstallEntry, actor str
 	if installed {
 		return errors.New("configuration center is already installed")
 	}
+	if missing := MissingInstallKeys(entries); len(missing) > 0 {
+		return fmt.Errorf("required installation values are missing: %s", strings.Join(missing, ", "))
+	}
 	for _, entry := range entries {
 		if _, err := s.Upsert(ctx, entry.Key, entry.Description, entry.IsSecret, entry.Value, actor); err != nil {
 			return err
@@ -116,4 +137,18 @@ func (s *Service) Install(ctx context.Context, entries []InstallEntry, actor str
 	}
 	_, err = s.Upsert(ctx, InstallationMarker, "framework installation marker", false, "true", actor)
 	return err
+}
+
+func MissingInstallKeys(entries []InstallEntry) []string {
+	values := make(map[string]string, len(entries))
+	for _, entry := range entries {
+		values[strings.TrimSpace(entry.Key)] = strings.TrimSpace(entry.Value)
+	}
+	missing := make([]string, 0)
+	for _, key := range requiredInstallKeys {
+		if values[key] == "" {
+			missing = append(missing, key)
+		}
+	}
+	return missing
 }

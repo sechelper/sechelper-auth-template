@@ -8,6 +8,22 @@ server {
         proxy_set_header X-Request-ID $request_id;
     }
 
+    location = /install {
+        auth_request /__install_guard;
+        error_page 401 403 404 =302 /;
+        root /usr/share/nginx/html;
+        try_files /index.html =404;
+    }
+
+    location = /__install_guard {
+        internal;
+        proxy_pass http://api:8080/internal/install-guard;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     location = /metrics {
         proxy_pass http://api:8080/metrics;
         proxy_set_header Host $host;

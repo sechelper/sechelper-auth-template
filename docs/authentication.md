@@ -18,7 +18,7 @@
 
 `GET /v1/auth/login` 只接受 `prompt=none` 或 `prompt=login`。认证模式绑定在一次性随机 `state` 的服务端事务中，不能由回调请求改写。业务登出后不会自动重新登录；用户再次进入业务时才会触发新的登录检查。
 
-退出登录先撤销本地 Session 和 Refresh Token，再使用 Discovery 返回的 `end_session_endpoint` 发起 OIDC RP-Initiated Logout。登录成功时，ID Token 以 AES-GCM 密文保存在服务端 Session 中，仅用于生成 `id_token_hint`。平台回跳业务首页 `/` 后，前台在首页后台校验 state、清理地址栏参数，不额外渲染退出页面。若平台未登记退出回调地址，平台会直接返回 `logged_out`，本地退出仍然有效，但业务端不会收到回调。
+退出登录先撤销本地 Session 和 Refresh Token。OIDC Profile 展示页完成退出后保持在当前页面，前端重新读取本地会话并直接显示未登录状态，不跳转到身份中心退出页面。服务端仍兼容生成 OIDC RP-Initiated Logout 地址和校验退出回调，供其他 API 客户端按需使用；浏览器 Profile 页不使用该地址，因此不会离开当前页面。
 
 服务端向统一认证平台调用业务 Manifest API 时，复用同一组 Confidential Client 的 `client_id` 与 `client_secret`，通过 Client Credentials Grant 获取短期 access token，并使用 Bearer Token 调用接口；浏览器和本地数据库都不接触该 access token。系统不支持 `manifest_id`、`manifest_secret` 或独立 Manifest 凭据。
 
@@ -42,4 +42,4 @@ Refresh Rotation 的确定性回归测试位于 `api/internal/modules/authentica
 - 登录事务的多实例共享。当前登录事务仍由认证服务内存保存，生产多副本部署前需要迁移到 Redis 或 PostgreSQL。
 - Refresh Token 的跨实例乐观锁/行锁。当前已增加单进程串行保护，不能替代多实例并发控制。
 
-退出登录要求 `X-CSRF-Token` 与非 HttpOnly 的 CSRF Cookie 一致；浏览器认证 API 客户端负责自动携带该 Header。业务写接口必须复用同一 CSRF 策略。服务端先撤销本地 Session，再按可选的 `identity.revocationEndpoint` 撤销远端 Refresh Token；远端失败不阻断本地登出，但会记录指标和告警。
+退出登录要求 `X-CSRF-Token` 与非 HttpOnly 的 CSRF Cookie 一致；浏览器认证 API 客户端负责自动携带该 Header。业务写接口必须复用同一 CSRF 策略。服务端先撤销本地 Session，再按可选的 `identity.revocationEndpoint` 撤销远端 Refresh Token；配置了可选的 `identity.endSessionEndpoint` 时才生成身份平台终止会话地址，两个远端 Endpoint 都不是首次安装必填项。未配置时仍完成本地登出；远端失败不阻断本地登出，但会记录指标和告警。

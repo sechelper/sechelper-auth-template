@@ -10,16 +10,16 @@ endif
 ifeq ($(origin WORKTREE_CLEAN),undefined)
 WORKTREE_CLEAN := $(shell if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git diff --quiet && git diff --cached --quiet && test -z "$$(git ls-files --others --exclude-standard)" && printf true || printf false; else printf false; fi)
 endif
-RELEASE_VERSION := $(shell sed -n 's/^releaseVersion:[[:space:]]*//p' release.yaml)
-RELEASE_BUILD_ID := $(shell sed -n 's/^releaseBuildId:[[:space:]]*//p' release.yaml)
-NPM_VERSION := $(shell sed -n 's/^npm:[[:space:]]*//p' toolchain.versions)
+RELEASE_VERSION := $(shell node deploy/scripts/read-project-config.mjs release version)
+RELEASE_BUILD_ID := $(shell node deploy/scripts/read-project-config.mjs release buildId)
+NPM_VERSION := $(shell node deploy/scripts/read-project-config.mjs toolchain npm)
 ifeq ($(filter command line,$(origin BUILD_ID)),)
 override BUILD_ID := $(if $(filter development,$(ENV_NORMALIZED)),dev-local,$(RELEASE_BUILD_ID))
 endif
 SOURCE_REVISION := $(if $(filter true,$(WORKTREE_CLEAN)),$(CHECKED_OUT_REVISION),working-tree)
-COMPOSE_DEV := docker compose --project-name sechelper-auth-template-dev --env-file deploy/environments/development.env -f deploy/compose.dev.yaml
-COMPOSE_TEST := docker compose --project-name sechelper-auth-template-test --env-file .env --env-file deploy/environments/test.env -f deploy/compose.prod.yaml
-COMPOSE_PRODUCTION := docker compose --project-name sechelper-auth-template --env-file .env --env-file deploy/environments/production.env -f deploy/compose.prod.yaml
+COMPOSE_DEV := docker compose --project-name sechelper-auth-template-dev -f deploy/compose.dev.yaml
+COMPOSE_TEST := docker compose --project-name sechelper-auth-template-test -f deploy/compose.test.yaml
+COMPOSE_PRODUCTION := docker compose --project-name sechelper-auth-template -f deploy/compose.prod.yaml
 ifeq ($(ENV_NORMALIZED),test)
 ifeq ($(origin BUILD_OUTPUT_DIR),undefined)
 BUILD_OUTPUT_DIR := $(shell mktemp -d "$${TMPDIR:-/tmp}/sechelper-auth-template-test-build.XXXXXX")
@@ -35,7 +35,7 @@ help:
 		'make run ENV=<development|test|production> Start the application stack through one entry point' \
 		'make release-check Validate canonical release metadata' \
 		'make release-id    Allocate and store a new UTC release Build ID' \
-		'make release-sync  Synchronize frontend package versions from release.yaml' \
+		'make release-sync  Synchronize frontend package versions from project.yaml' \
 		'make toolchain-check Verify declared compiler and package-manager versions' \
 		'make dev-down     Stop the local stack and preserve named volumes' \
 		'make db-migrate   Apply forward-only migrations to the configured database' \
@@ -50,9 +50,9 @@ dev:
 run:
 	@case "$(ACTION)" in serve|migrate) ;; *) echo 'ACTION must be serve or migrate' >&2; exit 2 ;; esac
 	@case "$(ENV_NORMALIZED)" in \
-		development) $(MAKE) --no-print-directory build ENV=$(ENV_NORMALIZED) && if [ "$(ACTION)" = migrate ]; then RELEASE_VERSION=$(RELEASE_VERSION) BUILD_ID=$(BUILD_ID) INCLUDE_EXAMPLE_MIGRATIONS=1 $(COMPOSE_DEV) run --rm migrate; elif [ "$(ACTION)" = serve ]; then RELEASE_VERSION=$(RELEASE_VERSION) BUILD_ID=$(BUILD_ID) INCLUDE_EXAMPLE_MIGRATIONS=1 $(COMPOSE_DEV) up -d --no-build; else echo 'ACTION must be serve or migrate' >&2; exit 2; fi ;; \
-		test) $(MAKE) --no-print-directory build ENV=$(ENV_NORMALIZED) && if [ "$(ACTION)" = migrate ]; then RELEASE_VERSION=$(RELEASE_VERSION) BUILD_ID=$(BUILD_ID) INCLUDE_EXAMPLE_MIGRATIONS=1 $(COMPOSE_TEST) run --rm migrate; else RELEASE_VERSION=$(RELEASE_VERSION) BUILD_ID=$(BUILD_ID) INCLUDE_EXAMPLE_MIGRATIONS=1 $(COMPOSE_TEST) up -d --no-build; fi ;; \
-		production) $(MAKE) --no-print-directory build ENV=$(ENV_NORMALIZED) && if [ "$(ACTION)" = migrate ]; then RELEASE_VERSION=$(RELEASE_VERSION) BUILD_ID=$(BUILD_ID) $(COMPOSE_PRODUCTION) run --rm migrate; else RELEASE_VERSION=$(RELEASE_VERSION) BUILD_ID=$(BUILD_ID) $(COMPOSE_PRODUCTION) up -d --no-build; fi ;; \
+		development) $(MAKE) --no-print-directory build ENV=$(ENV_NORMALIZED) && if [ "$(ACTION)" = migrate ]; then RELEASE_VERSION=$(RELEASE_VERSION) BUILD_ID=$(BUILD_ID) $(COMPOSE_DEV) run --rm migrate; elif [ "$(ACTION)" = serve ]; then RELEASE_VERSION=$(RELEASE_VERSION) BUILD_ID=$(BUILD_ID) $(COMPOSE_DEV) up -d --no-build; else echo 'ACTION must be serve or migrate' >&2; exit 2; fi ;; \
+		test) $(MAKE) --no-print-directory build ENV=$(ENV_NORMALIZED) && DEPLOYMENT_ENVIRONMENT=test $(COMPOSE_TEST) up -d && if [ "$(ACTION)" = migrate ]; then "$(BUILD_OUTPUT_DIR)/api/auth-template-migrate" --config "$${APP_CONFIG_FILE:-config.yaml}"; elif [ -n "$${TEST_SERVICE_UNIT:-}" ]; then systemctl restart "$${TEST_SERVICE_UNIT}"; else echo 'test API/Web/Admin artifacts are built for the remote physical host; set TEST_SERVICE_UNIT to restart the configured supervisor' >&2; fi ;; \
+		production) $(MAKE) --no-print-directory build ENV=$(ENV_NORMALIZED) && if [ "$(ACTION)" = migrate ]; then DEPLOYMENT_ENVIRONMENT=production RELEASE_VERSION=$(RELEASE_VERSION) BUILD_ID=$(BUILD_ID) $(COMPOSE_PRODUCTION) run --rm migrate; else DEPLOYMENT_ENVIRONMENT=production RELEASE_VERSION=$(RELEASE_VERSION) BUILD_ID=$(BUILD_ID) $(COMPOSE_PRODUCTION) up -d --no-build; fi ;; \
 		*) echo 'ENV must be development, test, or production' >&2; exit 2 ;; \
 	esac
 
@@ -63,7 +63,7 @@ release-check:
 	node deploy/scripts/check-release.mjs
 
 release-id:
-	node deploy/scripts/update-release-id.mjs release.yaml
+	node deploy/scripts/update-release-id.mjs project.yaml
 
 release-sync:
 	node deploy/scripts/sync-package-versions.mjs
@@ -94,7 +94,7 @@ example-orders-test: toolchain-check
 build: release-check toolchain-check
 	@case "$(ENV_NORMALIZED)" in development|test|production) ;; *) echo 'ENV must be development, test, or production' >&2; exit 2 ;; esac
 	@case "$(COMPONENT)" in all|api|web) ;; *) echo 'COMPONENT must be all, api, or web' >&2; exit 2 ;; esac
-	@if [ "$(ENV_NORMALIZED)" != development ] && [ "$(BUILD_ID)" != "$(RELEASE_BUILD_ID)" ]; then echo 'test/production BUILD_ID must match release.yaml releaseBuildId' >&2; exit 2; fi
+	@if [ "$(ENV_NORMALIZED)" != development ] && [ "$(BUILD_ID)" != "$(RELEASE_BUILD_ID)" ]; then echo 'test/production BUILD_ID must match project.yaml release.buildId' >&2; exit 2; fi
 	@if [ "$(ENV_NORMALIZED)" != development ] && { [ "$(WORKTREE_CLEAN)" != true ] || ! printf '%s' "$(SOURCE_REVISION)" | grep -Eq '^[0-9a-f]{40}$$' || [ "$(SOURCE_REVISION)" != "$(CHECKED_OUT_REVISION)" ]; }; then echo 'test/production builds require a clean committed source revision' >&2; exit 2; fi
 	@if [ "$(ENV_NORMALIZED)" = test ]; then \
 	  build_dir="$(BUILD_OUTPUT_DIR)"; mkdir -p "$$build_dir"; \

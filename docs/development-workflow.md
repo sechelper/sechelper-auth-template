@@ -12,7 +12,7 @@ make run ENV=development ACTION=migrate
 
 `ENV` 可取 `development`、`test` 或 `production`。`COMPONENT=all|api|web` 可缩小构建范围；`ACTION=serve|migrate` 选择统一入口中的程序行为。`make dev` 和 `make db-migrate` 是面向开发者的快捷别名，最终仍委托统一的运行流程。
 
-开发环境默认使用专用 Compose project，地址与服务组成以 [deploy/compose.dev.yaml](../deploy/compose.dev.yaml) 及配置样例为准。测试、生产环境使用受控的部署 Compose 定义。不要在生产配置中启用示例模块或测试迁移。
+开发环境默认使用专用 Compose project，地址与服务组成以 [deploy/compose.dev.yaml](../deploy/compose.dev.yaml) 及配置样例为准。测试环境业务服务按远程物理机规范使用主机 Go `1.26.8`、Node.js `24.21.0` 和 npm `11.19.1` 原生构建，PostgreSQL/Redis 等基础设施由 [deploy/compose.test.yaml](../deploy/compose.test.yaml) 运行；生产环境业务服务由 `deploy/compose.prod.yaml` 运行。环境名通过统一 Make 入口传入，不再维护项目环境文件。不要在生产配置中启用示例模块或测试迁移。
 
 API 与迁移程序均通过 `--config` 指定配置文件。配置由统一配置包载入，并校验配置环境与构建环境一致；不得在业务代码中自行读取环境变量、创建另一套配置加载方式或绕过启动入口。
 

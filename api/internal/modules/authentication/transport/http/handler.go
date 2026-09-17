@@ -87,7 +87,7 @@ func (h *Handler) logout(c *gin.Context) {
 	}
 	result := application.LogoutResult{}
 	if id := h.cookie(c); id != "" {
-		result, _ = h.service.Logout(c.Request.Context(), id, h.webOrigin+"/", logoutState)
+		result, _ = h.service.Logout(c.Request.Context(), id, h.webOrigin+"/v1/auth/logout/callback", logoutState)
 	}
 	h.clearCookie(c)
 	if result.EndSessionURL == "" {
@@ -104,7 +104,7 @@ func (h *Handler) logoutCallback(c *gin.Context) {
 		return
 	}
 	h.clearLogoutStateCookie(c)
-	c.JSON(http.StatusOK, gin.H{"loggedOut": true})
+	c.Redirect(http.StatusFound, h.webOrigin+"/")
 }
 func (h *Handler) refresh(c *gin.Context) {
 	if !h.validCSRF(c) {

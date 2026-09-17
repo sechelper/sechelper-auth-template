@@ -8,7 +8,7 @@
 
 - `PAYMENT_PROVIDER_URL`
 - `PAYMENT_TIMEOUT_SECONDS`
-- `REDIS_URL`
+- `PAYMENT_CACHE_NAMESPACE`
 - `ORDER_EXPORT_BUCKET`
 
 Key 必须使用大写环境变量格式：首字符为大写字母，后续只能使用大写字母、数字和下划线，最长 128 个字符。建议使用业务前缀，避免不同模块之间发生命名冲突。
@@ -79,9 +79,9 @@ func New(clientFactory ClientFactory, config application.ConfigurationProvider) 
 
 ## 生效与回滚
 
-配置中心依赖 PostgreSQL bootstrap 连接和独立的 `CONFIG_CENTER_ENCRYPTION_KEY`。因此数据库连接本身和配置中心加密密钥必须仍由启动配置或部署密钥提供，不能依赖同一个尚未建立的配置中心。兼容期可以使用 `SESSION_ENCRYPTION_KEY` 作为解密密钥，但新部署应尽快切换到独立密钥。
+配置中心依赖启动阶段注入的 PostgreSQL bootstrap 连接和独立的配置中心加密密钥。数据库连接本身、配置中心加密密钥和安装密钥由部署环境的敏感变量提供，不能依赖同一个尚未建立的配置中心。
 
-框架启动流程会先读取配置中心，再覆盖支持的 `DATABASE_*`、`REDIS_URL`、`IDENTITY_*`、`SESSION_*`、`LOG_*` 和其他框架运行参数，并重新构建依赖。`APP_ENV`、`APP_VERSION`、`APP_CONFIG_FILE`、`CONFIG_CENTER_DATABASE_URL` 和 `CONFIG_CENTER_ENCRYPTION_KEY` 不允许由配置中心覆盖。
+框架启动流程会先从 `config.yaml` 读取非敏感启动结构，并从部署环境注入 bootstrap 数据库连接和密钥，读取并解密配置中心，再覆盖支持的 Redis、Identity、Session、日志和其他框架运行参数，并重新构建依赖。数据库连接、bootstrap 密钥、安装密钥、构建元数据和配置文件路径不允许由配置中心覆盖。
 
 普通业务配置通过 provider 读取时可在运行期间取得最新值。数据库连接池、Redis 客户端等已经创建的基础设施不会因为后台修改自动重建；修改这类配置后应执行受控重启，并先验证新值，再下线旧实例。
 

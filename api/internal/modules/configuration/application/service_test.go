@@ -82,3 +82,45 @@ func TestUpsertRejectsNonEnvironmentKeysAndBlankValues(t *testing.T) {
 		}
 	}
 }
+
+func TestMissingInstallKeysRejectsIncompleteFrameworkConfiguration(t *testing.T) {
+	missing := MissingInstallKeys([]InstallEntry{{Key: "APP_ENV", Value: "test"}})
+	if len(missing) == 0 {
+		t.Fatal("incomplete install configuration was accepted")
+	}
+	for _, key := range missing {
+		if key == "APP_ENV" {
+			t.Fatal("provided APP_ENV was reported as missing")
+		}
+	}
+}
+
+func TestMissingInstallKeysAllowsOptionalIdentityEndpoints(t *testing.T) {
+	entries := make([]InstallEntry, 0, len(requiredInstallKeys)+2)
+	for _, key := range requiredInstallKeys {
+		entries = append(entries, InstallEntry{Key: key, Value: "configured"})
+	}
+	entries = append(entries,
+		InstallEntry{Key: "IDENTITY_REVOCATION_ENDPOINT", Value: ""},
+		InstallEntry{Key: "IDENTITY_END_SESSION_ENDPOINT", Value: ""},
+	)
+
+	if missing := MissingInstallKeys(entries); len(missing) != 0 {
+		t.Fatalf("optional identity endpoints were reported as missing: %v", missing)
+	}
+}
+
+func TestIsInstalledRejectsMarkerWithIncompleteConfiguration(t *testing.T) {
+	repository := newTestRepository()
+	service := NewService(repository, testProtector{})
+	if _, err := service.Upsert(context.Background(), InstallationMarker, "marker", false, "true", "installer"); err != nil {
+		t.Fatal(err)
+	}
+	installed, err := service.IsInstalled(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if installed {
+		t.Fatal("incomplete installation marker was accepted")
+	}
+}

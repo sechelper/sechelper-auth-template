@@ -1,6 +1,7 @@
 import fs from "node:fs";
+import { readProjectConfig } from "./read-project-config.mjs";
 
-const release = Object.fromEntries([...fs.readFileSync("release.yaml", "utf8").matchAll(/^([A-Za-z][A-Za-z0-9]*):\s*(\S+)\s*$/gm)].map(([, key, value]) => [key, value]));
+const release = readProjectConfig().release;
 for (const root of ["web", "web/admin"]) {
   const packagePath = `${root}/package.json`;
   const lockPath = `${root}/package-lock.json`;

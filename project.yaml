@@ -1,0 +1,10 @@
+release:
+  version: 0.1.2
+  buildId: 20260917001357
+
+toolchain:
+  go: 1.26.8
+  node: 24.21.0
+  npm: 11.19.1
+  react: 19.2.7
+  vite: 7.1.7

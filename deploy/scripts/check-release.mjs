@@ -1,42 +1,40 @@
 import fs from "node:fs";
+import { readProjectConfig } from "./read-project-config.mjs";
 
 const fail = (message) => {
   console.error(message);
   process.exitCode = 1;
 };
 
-const releaseText = fs.readFileSync("release.yaml", "utf8");
-const entries = [...releaseText.matchAll(/^([A-Za-z][A-Za-z0-9]*):\s*(\S+)\s*$/gm)];
-const release = Object.fromEntries(entries.map(([, key, value]) => [key, value]));
-if (entries.length !== 2 || Object.keys(release).sort().join(",") !== "releaseBuildId,releaseVersion") {
-  fail("release.yaml must contain exactly releaseVersion and releaseBuildId");
-}
+const release = readProjectConfig().release;
+release.releaseVersion = release.version;
+release.releaseBuildId = release.buildId;
 if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/.test(release.releaseVersion ?? "")) {
-  fail("release.yaml releaseVersion must be a valid SemVer value");
+  fail("project.yaml release.version must be a valid SemVer value");
 }
 const buildId = release.releaseBuildId ?? "";
 const buildDate = /^\d{14}$/.test(buildId)
   ? new Date(`${buildId.slice(0, 4)}-${buildId.slice(4, 6)}-${buildId.slice(6, 8)}T${buildId.slice(8, 10)}:${buildId.slice(10, 12)}:${buildId.slice(12, 14)}Z`)
   : null;
 if (!buildDate || !Number.isFinite(buildDate.valueOf()) || buildDate.toISOString().replace(/[-:TZ]/g, "").slice(0, 14) !== buildId) {
-  fail("release.yaml releaseBuildId must be a valid UTC YYYYMMDDHHmmss timestamp");
+  fail("project.yaml release.buildId must be a valid UTC YYYYMMDDHHmmss timestamp");
 }
 
 for (const root of ["web", "web/admin"]) {
   const manifest = JSON.parse(fs.readFileSync(`${root}/package.json`, "utf8"));
   const lock = JSON.parse(fs.readFileSync(`${root}/package-lock.json`, "utf8"));
   if (manifest.version !== release.releaseVersion || lock.version !== release.releaseVersion || lock.packages?.[""]?.version !== release.releaseVersion) {
-    fail(`${root} package.json and package-lock.json versions must be synchronized from release.yaml (${release.releaseVersion})`);
+    fail(`${root} package.json and package-lock.json versions must be synchronized from project.yaml (${release.releaseVersion})`);
   }
 }
 
-for (const configPath of ["config.example.yaml", "deploy/config.dev.yaml"]) {
+for (const configPath of ["config.example.yaml"]) {
   const config = fs.readFileSync(configPath, "utf8");
   let inApp = false;
   for (const line of config.split(/\r?\n/)) {
     if (/^app:\s*$/.test(line)) inApp = true;
     else if (line.trim() && !/^\s/.test(line)) inApp = false;
-    else if (inApp && /^\s+version\s*:/.test(line)) fail(`${configPath} must not configure app.version; release.yaml is authoritative`);
+    else if (inApp && /^\s+version\s*:/.test(line)) fail(`${configPath} must not configure app.version; project.yaml is authoritative`);
   }
 }
 const configSource = fs.readFileSync("api/internal/platform/config/config.go", "utf8");

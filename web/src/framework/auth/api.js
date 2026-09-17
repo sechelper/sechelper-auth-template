@@ -20,6 +20,7 @@ export async function request(path, options = {}) {
 
 export const authApi = {
   session: () => request("/v1/auth/session"),
+  account: () => request("/v1/account/me"),
   refresh: () => request("/v1/auth/refresh", { method: "POST" }),
   logout: () => request("/v1/auth/logout", { method: "POST" }),
   logoutCallback: (state) => request(`/v1/auth/logout/callback?state=${encodeURIComponent(state)}`),

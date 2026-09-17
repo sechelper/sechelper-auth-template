@@ -11,11 +11,11 @@ import (
 func TestSessionAdministrationRoutesAreNotRegistered(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	module := New()
+	module := New(nil, "session")
 	module.RegisterRoutes(router.Group("/v1"), func(c *gin.Context) { c.Next() })
 
-	if got := len(router.Routes()); got != 1 {
-		t.Fatalf("registered route count = %d, want only current account route", got)
+	if got := len(router.Routes()); got != 2 {
+		t.Fatalf("registered route count = %d, want current user and admin account routes", got)
 	}
 
 	for _, testCase := range []struct {

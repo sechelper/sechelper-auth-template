@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import "./profile-example.css";
-import { oidcAccountURL } from "../../framework/config/runtime.js";
 
 export function ProfileExamplePage({ auth }) {
-  const { state, login, logout, refreshSession, refresh } = auth;
+  const { state, login, logout, refreshSession, refresh, userCenterURL } = auth;
   const [pending, setPending] = useState("");
   const [actionError, setActionError] = useState("");
-  const settingsURL = oidcAccountURL();
+  const settingsURL = userCenterURL();
 
   useEffect(() => {
     document.title = "SECHELPER COMMUNITY · OIDC Profile 示例";

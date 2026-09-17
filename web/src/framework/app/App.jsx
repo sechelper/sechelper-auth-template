@@ -8,7 +8,7 @@ import { InstallPage } from "../pages/install/InstallPage.jsx";
 validatePublicBusinessModules();
 
 export function App() {
-  const { state, login, silentLogin, logout, refresh, refreshSession } = useAuth();
+  const { state, login, silentLogin, logout, refresh, refreshSession, userCenterURL } = useAuth();
   const DevelopmentProfileExamplePage = useMemo(() => (import.meta.env?.DEV || import.meta.env?.MODE === "test")
     ? lazy(() => import("../../business/profile-example/example-module.js"))
     : null, []);
@@ -33,10 +33,10 @@ export function App() {
   if (pathname === "/install") return <InstallPage />;
   if (businessRoute) {
     const BusinessPage = businessRoute.element;
-    return <BusinessPage auth={{ state, login, silentLogin, logout, refresh, refreshSession }} />;
+    return <BusinessPage auth={{ state, login, silentLogin, logout, refresh, refreshSession, userCenterURL }} />;
   }
   if (pathname === "/" && (import.meta.env?.DEV || import.meta.env?.MODE === "test")) {
-    return <Suspense fallback={<p role="status">正在载入开发示例…</p>}><DevelopmentProfileExamplePage auth={{ state, login, silentLogin, logout, refresh, refreshSession }} /></Suspense>;
+    return <Suspense fallback={<p role="status">正在载入开发示例…</p>}><DevelopmentProfileExamplePage auth={{ state, login, silentLogin, logout, refresh, refreshSession, userCenterURL }} /></Suspense>;
   }
   return <GlobalErrorPage code={404} />;
 }

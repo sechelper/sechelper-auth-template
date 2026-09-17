@@ -48,16 +48,14 @@ function Page({ pathname, session, hasPermission }) {
 }
 
 export function AdminApp() {
-  const { state, hasPermission, login, logout, refreshSession } = useAuth();
-  const [signedOut, setSignedOut] = useState(false);
+  const { state, hasPermission, login, logout, refreshSession, userCenterURL } = useAuth();
   const [pathname, setPathname] = useState(() => initialAdminPath());
   useEffect(() => { const handler = () => setPathname(normalizePathname()); window.addEventListener("popstate", handler); return () => window.removeEventListener("popstate", handler); }, []);
-  useEffect(() => { if (state.status === "unauthenticated" && !signedOut) login(); }, [state.status, signedOut, login]);
+  useEffect(() => { if (state.status === "unauthenticated") login(); }, [state.status, login]);
   if (state.status === "loading") return <Loading text="正在验证管理员会话…" />;
-  if (signedOut && state.status !== "authenticated") return null;
   if (state.status === "error") return <ServerErrorPage retry={login} />;
   if (state.status !== "authenticated") return null;
   if (!hasPermission("admin:access")) return <ForbiddenPage />;
   const visibleMenu = filterMenuByPermission([...menu, ...businessNavigation], hasPermission);
-  return <AdminLayout pathname={pathname} menu={visibleMenu} state={state} onRefresh={refreshSession} onLogout={async () => { setSignedOut(true); await logout(); window.location.assign("/"); }}><Page pathname={pathname} session={state} hasPermission={hasPermission} /></AdminLayout>;
+  return <AdminLayout pathname={pathname} menu={visibleMenu} state={state} userCenterURL={userCenterURL} onRefresh={refreshSession} onLogout={logout}><Page pathname={pathname} session={state} hasPermission={hasPermission} /></AdminLayout>;
 }

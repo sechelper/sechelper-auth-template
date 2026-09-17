@@ -78,6 +78,19 @@ paths:
               schema: { $ref: '#/components/schemas/SessionResponse' }
         '500':
           description: Session status could not be returned
+  /v1/account/me:
+    get:
+      operationId: getCurrentAccount
+      summary: Read the current authenticated user's identity profile
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current account profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CurrentAccountResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /v1/version:
     get:
       operationId: getBuildVersion
@@ -520,6 +533,20 @@ components:
           type: array
           items: { type: string }
         expiresAt: { type: string, format: date-time }
+    CurrentAccountResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [subject, identitySubject, email, applicationCode, profile]
+          properties:
+            subject: { type: string, description: Deprecated compatibility alias for identitySubject. }
+            identitySubject: { type: string, description: Opaque issuer-scoped identity subject. }
+            platformUserUuid: { type: string, format: uuid }
+            email: { type: string }
+            applicationCode: { type: string }
+            profile: { type: object, additionalProperties: true }
     ConfigurationEntry:
       type: object
       required: [key, isSecret, version, updatedAt]

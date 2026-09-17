@@ -26,6 +26,12 @@
 
 ## 会话
 
+框架客户端将认证能力统一封装为登录、退出、会话探测和当前用户信息读取。`GET /v1/auth/session` 只用于判断本地会话是否有效；登录后由框架继续请求 `GET /v1/account/me` 获取当前用户的展示资料，业务模块不得直接读取认证 Cookie、Token 或调用身份平台 UserInfo。
+
+“设置”不是本应用的用户设置模块，而是框架提供的统一身份中心用户中心链接。前台和管理后台使用相同的运行时地址入口，个人资料、密码、多重验证和登录设备等账户管理均在统一身份中心完成，本应用不保存这些设置。
+
+前台和管理后台各自编译，但都向业务暴露相同的框架认证能力：`login`、`logout`、`refreshSession`、当前用户状态和用户中心链接。登录路径保存、静默登录标记、退出后的本地状态清理、后台登录保护和退出后的回到应用首页均由框架认证 Provider 负责，业务页面不重复实现认证流程。
+
 当前代码已提供 PostgreSQL Session Store。登录事务的 state、nonce 和 PKCE verifier 已保存到 `authentication_login_transactions`，回调通过一次性 DELETE 原子消费，支持多实例回调并防止 state 重放。Session 通过 `version` 字段进行乐观并发控制，刷新写回使用版本条件；跨实例冲突会拒绝旧版本更新。数据库结构必须先通过独立迁移命令完成；API 启动时只检查数据库连通性，不再隐式修改 schema。Redis、多实例缓存广播和远端 Token 撤销仍需在统一认证平台契约确认后实现。
 
 `/v1/auth/login`、`/v1/auth/callback` 和 `/v1/auth/refresh` 由 `rateLimit` 配置限流。生产使用 Redis 计数器，开发环境在未配置 Redis 时使用进程内计数器；超过限制返回 `429 RATE_LIMITED` 和 `Retry-After`。

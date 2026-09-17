@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { authApi, clearAuthStatus, consumeInteractiveLoginAttempt, consumeSilentLoginAttempt, hasExplicitLogout, hasSilentLoginFailure, markExplicitLogout, markSilentLoginAttempt } from "./api.js";
+import { oidcAccountURL } from "../config/runtime.js";
 
 const AuthContext = createContext(null);
 
@@ -25,7 +26,8 @@ export function AuthProvider({ children }) {
         if (value.authenticated) {
           consumeInteractiveLoginAttempt();
           consumeSilentLoginAttempt();
-          setState({ status: "authenticated", ...value });
+          const account = await authApi.account();
+          setState({ status: "authenticated", ...value, user: account.data });
           return;
         }
         if (hasExplicitLogout()) {
@@ -54,7 +56,7 @@ export function AuthProvider({ children }) {
     initialize();
     return () => { cancelled = true; };
   }, []);
-  const value = useMemo(() => ({ state, login: authApi.login, silentLogin: () => { markSilentLoginAttempt(); authApi.login({ prompt: "none" }); }, refreshSession: async () => { await authApi.refresh(); await refresh(); }, logout: async () => { const result = await authApi.logout(); markExplicitLogout(); if (result.logoutUrl) { window.location.assign(result.logoutUrl); return; } setState({ status: "unauthenticated" }); }, refresh }), [state]);
+  const value = useMemo(() => ({ state, user: state.user || null, login: authApi.login, silentLogin: () => { markSilentLoginAttempt(); authApi.login({ prompt: "none" }); }, refreshSession: async () => { await authApi.refresh(); await refresh(); }, logout: async () => { const result = await authApi.logout(); markExplicitLogout(); if (result.logoutUrl) { window.location.assign(result.logoutUrl); return; } setState({ status: "unauthenticated" }); }, userCenterURL: () => oidcAccountURL(), refresh }), [state]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

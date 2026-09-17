@@ -81,7 +81,7 @@ func (m *Module) install(c *gin.Context) {
 		httpkit.WriteError(c, http.StatusConflict, httpkit.Error{Code: "INSTALL_FAILED"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": gin.H{"installed": true, "saved": len(input.Entries)}})
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"installed": true, "saved": len(input.Entries), "restartRequired": true}})
 }
 
 var errInstallLocked = errors.New("installation lock already exists")

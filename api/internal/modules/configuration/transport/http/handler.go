@@ -67,7 +67,7 @@ func (h *Handler) Put(c *gin.Context) {
 	if h.audit != nil {
 		h.audit(actor, "updated", value.Key)
 	}
-	httpkit.WriteData(c, stdhttp.StatusOK, value)
+	c.JSON(stdhttp.StatusOK, gin.H{"data": value, "meta": gin.H{"restartRequired": true}})
 }
 func (h *Handler) Delete(c *gin.Context) {
 	actor := "system"

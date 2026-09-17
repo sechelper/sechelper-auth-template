@@ -18,6 +18,7 @@ export function ConfigurationPage() {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [savedMessage, setSavedMessage] = useState("");
   const [key, setKey] = useState("");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
@@ -64,7 +65,7 @@ export function ConfigurationPage() {
     event.preventDefault();
     if (!key.trim() || !form.value) return;
     setBusy(true); setError(null);
-    try { await configurationApi.save(key.trim().toUpperCase(), form); resetForm(); await load(); }
+    try { const result = await configurationApi.save(key.trim().toUpperCase(), form); resetForm(); await load(); setSavedMessage(result.meta?.restartRequired ? "配置已保存，重启服务后生效。" : "配置已保存。"); }
     catch (value) { setError(value); }
     finally { setBusy(false); }
   };
@@ -86,6 +87,7 @@ export function ConfigurationPage() {
 
   return <>
     <PageHeader code="BUSINESS" title="业务配置" description="管理业务模块可读取的自定义环境变量，敏感值以密文保存。" />
+    {savedMessage && <div className="configuration-inline-success" role="status"><strong>保存成功</strong><span>{savedMessage}</span><button type="button" onClick={() => setSavedMessage("")}>知道了</button></div>}
     <section className="configuration-hero card" aria-label="配置中心说明"><div className="configuration-hero-copy"><div className="configuration-icon-wrap"><ConfigIcon name="shield" /></div><div><span className="configuration-overline">RUNTIME CONFIGURATION</span><h2>安全地管理运行时变量</h2><p>业务模块通过服务端只读接口获取配置。敏感值不会在列表或详情中回显，基础设施连接配置修改后需按发布流程重启生效。</p></div></div><div className="configuration-hero-note"><strong>配置原则</strong><span>Key 使用大写环境变量格式</span><code>DATABASE_PASSWORD</code></div></section>
     <section className="configuration-stats" aria-label="配置统计"><article className="configuration-stat card"><span className="configuration-stat-icon configuration-stat-icon-primary"><ConfigIcon name="grid" /></span><div><strong>{rows.length}</strong><span>全部配置</span></div></article><article className="configuration-stat card"><span className="configuration-stat-icon configuration-stat-icon-warning"><ConfigIcon name="shield" /></span><div><strong>{secretCount}</strong><span>敏感值</span></div></article><article className="configuration-stat card"><span className="configuration-stat-icon configuration-stat-icon-info"><ConfigIcon name="grid" /></span><div><strong>{plainCount}</strong><span>普通值</span></div></article></section>
     {error && <div className="configuration-inline-error" role="alert"><strong>操作未完成</strong><span>{error.message || "服务暂时不可用"}</span><button type="button" onClick={() => setError(null)}>知道了</button></div>}

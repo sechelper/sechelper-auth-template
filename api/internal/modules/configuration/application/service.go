@@ -54,11 +54,12 @@ func (s *Service) GetValue(ctx context.Context, key string) (string, bool) {
 }
 func (s *Service) List(ctx context.Context) ([]domain.Entry, error) { return s.repository.List(ctx) }
 func (s *Service) Resolve(ctx context.Context) (map[string]string, error) {
-	values, err := s.repository.Values(ctx)
+	stored, err := s.repository.Values(ctx)
 	if err != nil {
 		return nil, err
 	}
-	for key, encrypted := range values {
+	values := make(map[string]string, len(stored))
+	for key, encrypted := range stored {
 		value, err := s.protector.Decrypt(encrypted)
 		if err != nil {
 			return nil, fmt.Errorf("decrypt configuration %s: %w", key, err)

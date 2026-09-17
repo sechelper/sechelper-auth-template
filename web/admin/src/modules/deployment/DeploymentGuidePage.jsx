@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { PageHeader } from "../../app/components.jsx";
+import { Loading, PageHeader } from "../../app/components.jsx";
 import { configurationApi } from "../configuration/api.js";
 
 const variableDefinitions = [

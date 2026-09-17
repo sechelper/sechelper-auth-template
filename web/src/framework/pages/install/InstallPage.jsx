@@ -9,7 +9,7 @@ const allFrameworkVariables = [
   ["IDENTITY_ISSUER", "身份平台 Issuer", false, "https://passport.example.com", ""], ["IDENTITY_AUTHORIZATION_ENDPOINT", "身份授权地址", false, "https://passport.example.com/oauth2/authorize", ""], ["IDENTITY_TOKEN_ENDPOINT", "身份 Token 地址", false, "https://passport.example.com/oauth2/token", ""], ["IDENTITY_USERINFO_ENDPOINT", "身份 UserInfo 地址", false, "https://passport.example.com/userinfo", ""], ["IDENTITY_JWKS_URL", "身份 JWKS 地址", false, "https://passport.example.com/oauth2/jwks", ""], ["IDENTITY_AUDIENCE", "身份 Audience", false, "auth-template-api", ""], ["IDENTITY_CLIENT_ID", "身份 Client ID", false, "client-id", ""], ["IDENTITY_CLIENT_SECRET", "身份 Client Secret", true, "输入 Client Secret", ""], ["IDENTITY_REDIRECT_URI", "OIDC 回调地址", false, "https://example.com/v1/auth/callback", ""], ["IDENTITY_APPLICATION_CODE", "身份 Application Code", false, "app-auth-template", ""], ["IDENTITY_SCOPES", "身份 Scope", false, "openid,profile,email", "openid,profile,email"],
   ["MANIFEST_SYNC_INTERVAL", "Manifest 同步周期", false, "10m", "10m"], ["SESSION_COOKIE_NAME", "Session Cookie 名称", false, "auth_template_session", "auth_template_session"], ["SESSION_TTL", "Session 有效期", false, "8h", "8h"], ["SESSION_SECURE", "仅通过 HTTPS 发送 Cookie", false, "true", "false"], ["SESSION_SAME_SITE", "Cookie SameSite", false, "Lax", "Lax"], ["SESSION_ENCRYPTION_KEY", "Session 加密密钥", true, "RawStdEncoding 32 字节密钥", ""], ["ALLOWED_ORIGINS", "允许的浏览器 Origin", false, "https://example.com", ""], ["TRUSTED_PROXY_CIDRS", "可信代理网段", false, "127.0.0.1/32", "127.0.0.1/32"], ["METRICS_TOKEN", "Metrics Token", true, "输入 Metrics Token", ""], ["RATE_LIMIT_LOGIN_PER_MINUTE", "登录限流", false, "10", "10"], ["RATE_LIMIT_CALLBACK_PER_MINUTE", "回调限流", false, "20", "20"], ["RATE_LIMIT_REFRESH_PER_MINUTE", "刷新限流", false, "30", "30"], ["IDENTITY_REVOCATION_ENDPOINT", "身份撤销地址", false, "https://passport.example.com/oauth/revoke", ""], ["IDENTITY_END_SESSION_ENDPOINT", "身份退出地址", false, "https://passport.example.com/oauth2/logout", ""], ["LOG_MODE", "日志模式", false, "local_file", "local_file"], ["LOG_LEVEL", "日志级别", false, "info", "info"], ["LOG_OUTPUT", "日志路径", false, "/var/log/auth-template", "logs/app.log"], ["LOG_RETENTION_DAYS", "日志保留天数", false, "180", "180"], ["DEBUG", "调试开关", false, "false", "false"],
 ];
-const frameworkVariables = allFrameworkVariables.filter(([key]) => key !== "SERVER_HOST" && key !== "SERVER_PORT");
+const frameworkVariables = allFrameworkVariables.map((entry) => entry[0] === "SESSION_COOKIE_NAME" ? [...entry.slice(0, 3), "auth", "auth"] : entry).filter(([key]) => key !== "SERVER_HOST" && key !== "SERVER_PORT");
 const installFrameworkVariables = frameworkVariables;
 const requiredFrameworkKeys = new Set([
   "APP_ENV", "APP_NAME", "SERVER_READ_TIMEOUT", "SERVER_WRITE_TIMEOUT", "SERVER_IDLE_TIMEOUT", "SERVER_SHUTDOWN_TIMEOUT", "PUBLIC_WEB_ORIGIN", "API_ORIGIN", "PRIMARY_DOMAIN", "TEST_DOMAIN_SUFFIX",
@@ -34,16 +34,13 @@ function randomMetricsToken() {
 const defaultValues = () => {
   const origin = window.location.origin;
   const hostname = window.location.hostname;
-  const identityEndSessionEndpoint = import.meta.env.MODE === "production"
-    ? "https://passport.sechelper.com/oauth2/logout"
-    : "https://passport-test.sechelper.com/oauth2/logout";
   return Object.fromEntries(frameworkVariables.map(([key,,,, defaultValue]) => [key, {
     APP_ENV: import.meta.env.MODE === "test" || import.meta.env.MODE === "production" ? import.meta.env.MODE : defaultValue,
     PUBLIC_WEB_ORIGIN: origin,
     API_ORIGIN: origin,
     PRIMARY_DOMAIN: hostname,
     IDENTITY_REDIRECT_URI: `${origin}/v1/auth/callback`,
-    IDENTITY_END_SESSION_ENDPOINT: identityEndSessionEndpoint,
+    IDENTITY_END_SESSION_ENDPOINT: "",
     ALLOWED_ORIGINS: origin,
     SESSION_ENCRYPTION_KEY: randomSessionEncryptionKey(),
     METRICS_TOKEN: randomMetricsToken(),

@@ -7,12 +7,30 @@ import (
 )
 
 type AppInfo struct {
-	Name           string
-	Version        string
-	Environment    string
-	BuildID        string
-	SourceRevision string
-	StartedAt      time.Time
+	Name                          string
+	Version                       string
+	Environment                   string
+	BuildID                       string
+	SourceRevision                string
+	StartedAt                     time.Time
+	IdentityIssuer                string `json:"issuer"`
+	IdentityAuthorizationEndpoint string `json:"authorizationEndpoint"`
+	IdentityTokenEndpoint         string `json:"tokenEndpoint"`
+	IdentityUserinfoEndpoint      string `json:"userinfoEndpoint"`
+	IdentityJWKSURL               string `json:"jwksUrl"`
+}
+
+type RuntimeConfig struct {
+	SystemName string                `json:"systemName"`
+	Identity   RuntimeIdentityConfig `json:"identity"`
+}
+
+type RuntimeIdentityConfig struct {
+	Issuer                string `json:"issuer"`
+	AuthorizationEndpoint string `json:"authorizationEndpoint"`
+	TokenEndpoint         string `json:"tokenEndpoint"`
+	UserinfoEndpoint      string `json:"userinfoEndpoint"`
+	JWKSURL               string `json:"jwksUrl"`
 }
 
 type ManifestState struct {
@@ -67,6 +85,10 @@ func NewService(db *sql.DB, app AppInfo, manifestReader ManifestReader, cachePin
 }
 
 func (s *Service) AppInfo() AppInfo { return s.app }
+
+func (s *Service) RuntimeConfig() RuntimeConfig {
+	return RuntimeConfig{SystemName: s.app.Name, Identity: RuntimeIdentityConfig{Issuer: s.app.IdentityIssuer, AuthorizationEndpoint: s.app.IdentityAuthorizationEndpoint, TokenEndpoint: s.app.IdentityTokenEndpoint, UserinfoEndpoint: s.app.IdentityUserinfoEndpoint, JWKSURL: s.app.IdentityJWKSURL}}
+}
 
 func (s *Service) ResourceSnapshot() (ResourceMetrics, bool) {
 	if s.resources == nil {

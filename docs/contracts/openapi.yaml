@@ -27,6 +27,34 @@ paths:
           description: Service is ready
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /v1/runtime-config:
+    get:
+      operationId: getPublicRuntimeConfiguration
+      summary: Read non-sensitive frontend runtime configuration
+      description: Returns only public values resolved by the server at startup. It never returns client secrets, session keys, metrics tokens, or database credentials.
+      responses:
+        '200':
+          description: Public runtime configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [systemName, identity]
+                    properties:
+                      systemName: { type: string }
+                      identity:
+                        type: object
+                        required: [issuer, authorizationEndpoint, tokenEndpoint, userinfoEndpoint, jwksUrl]
+                        properties:
+                          issuer: { type: string, format: uri }
+                          authorizationEndpoint: { type: string, format: uri }
+                          tokenEndpoint: { type: string, format: uri }
+                          userinfoEndpoint: { type: string, format: uri }
+                          jwksUrl: { type: string, format: uri }
   /v1/auth/login:
     get:
       operationId: startLogin
@@ -489,7 +517,7 @@ components:
     sessionCookie:
       type: apiKey
       in: cookie
-      name: auth_template_session
+      name: auth
   responses:
     Unauthorized:
       description: Missing or expired session

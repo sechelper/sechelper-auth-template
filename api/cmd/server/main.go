@@ -212,7 +212,7 @@ func main() {
 	}
 	resourceCollector := dashboardapplication.NewSystemResourcesCollector(".", dashboardapplication.DefaultResourceSampleInterval)
 	defer resourceCollector.Close()
-	dashboardModule := dashboard.New(dashboardapplication.NewService(db, dashboardapplication.AppInfo{Name: cfg.App.Name, Version: releaseVersion, Environment: cfg.App.Environment, BuildID: buildID, SourceRevision: buildRevision, StartedAt: startedAt}, dashboardManifestReader, cachePinger, resourceCollector))
+	dashboardModule := dashboard.New(dashboardapplication.NewService(db, dashboardapplication.AppInfo{Name: cfg.App.Name, Version: releaseVersion, Environment: cfg.App.Environment, BuildID: buildID, SourceRevision: buildRevision, StartedAt: startedAt, IdentityIssuer: cfg.Identity.Issuer, IdentityAuthorizationEndpoint: cfg.Identity.AuthorizationEndpoint, IdentityTokenEndpoint: cfg.Identity.TokenEndpoint, IdentityUserinfoEndpoint: cfg.Identity.UserinfoEndpoint, IdentityJWKSURL: cfg.Identity.JWKSURL}, dashboardManifestReader, cachePinger, resourceCollector))
 	appInfo := operationsapplication.AppInfo{Name: cfg.App.Name, Version: releaseVersion, Environment: cfg.App.Environment, BuildID: buildID, SourceRevision: buildRevision, StartedAt: startedAt}
 	operationsService := operationsapplication.NewService(db, appInfo, serviceMetrics)
 	operationsService.SetDeploymentInfo(operationsapplication.DeploymentInfo{App: appInfo, BootstrapDatabaseConfigured: cfg.Bootstrap.DatabaseURL != "", BootstrapEncryptionConfigured: cfg.Bootstrap.EncryptionKey != "", ConfigurationLoaded: true})

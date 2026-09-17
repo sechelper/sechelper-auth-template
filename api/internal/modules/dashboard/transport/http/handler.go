@@ -31,6 +31,11 @@ func (h *Handler) Version(c *gin.Context) {
 	}})
 }
 
+func (h *Handler) RuntimeConfig(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	httpkit.WriteData(c, http.StatusOK, h.service.RuntimeConfig())
+}
+
 func (h *Handler) Overview(c *gin.Context) {
 	current, ok := authzhttp.Current(c)
 	if !ok {

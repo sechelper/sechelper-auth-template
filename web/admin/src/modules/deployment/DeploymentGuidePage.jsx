@@ -23,7 +23,7 @@ const variableDefinitions = [
   ["IDENTITY_SCOPES", "身份 Scope", false, "openid,profile,email"],
   ["MANIFEST_SYNC_INTERVAL", "Manifest 同步周期", false, "10m"],
   ["RATE_LIMIT_LOGIN_PER_MINUTE", "登录限流", false, "10"], ["RATE_LIMIT_CALLBACK_PER_MINUTE", "回调限流", false, "20"], ["RATE_LIMIT_REFRESH_PER_MINUTE", "刷新限流", false, "30"],
-  ["SESSION_COOKIE_NAME", "Session Cookie 名称", false, "auth_template_session"],
+  ["SESSION_COOKIE_NAME", "Session Cookie 名称", false, "auth"],
   ["SESSION_TTL", "Session 有效期", false, "8h"],
   ["SESSION_SECURE", "仅通过 HTTPS 发送 Cookie", false, "true"],
   ["SESSION_SAME_SITE", "Cookie SameSite", false, "Lax"],

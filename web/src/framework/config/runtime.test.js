@@ -7,8 +7,9 @@ test("apiOrigin uses the injected public runtime configuration", () => {
   assert.equal(apiOrigin(), "https://api.example.test");
 });
 
-test("OIDC account URL uses the discovery origin from code", () => {
-  assert.equal(oidcAccountURL(), "https://passport-test.sechelper.com");
+test("OIDC account URL falls back to the current origin before runtime config loads", () => {
+  globalThis.window = { location: { origin: "http://localhost:5173" } };
+  assert.equal(oidcAccountURL(), "http://localhost:5173");
 });
 
 test("apiOrigin falls back to the browser origin", () => {

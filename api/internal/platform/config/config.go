@@ -225,10 +225,11 @@ func setDefaults(v *viper.Viper) {
 	for key, value := range map[string]any{"app.name": "auth-template", "app.environment": "development", "app.testDomainSuffix": "-test", "server.readTimeout": "10s", "server.writeTimeout": "15s", "server.idleTimeout": "60s", "server.shutdownTimeout": "15s", "identity.scopes": []string{"openid", "profile", "email"}, "manifest.syncInterval": "10m", "session.cookieName": "auth_template_session", "session.ttl": "8h", "session.secure": false, "session.sameSite": "Lax", "log.mode": "file", "log.encoding": "json", "log.level": "info", "log.output": "logs/app.log", "log.timeKey": "ts", "log.levelKey": "level", "log.messageKey": "msg", "log.callerKey": "caller", "log.stacktraceKey": "stacktrace", "log.timeEncoding": "iso8601", "log.levelEncoding": "lowercase", "log.development": false, "log.disableCaller": false, "log.disableStacktrace": true, "log.sampling": false, "log.retentionDays": 180, "log.maxSizeMB": 100, "log.maxBackups": 10, "log.maxAgeDays": 180, "log.compress": true, "log.debug": false} {
 		v.SetDefault(key, value)
 	}
+	v.SetDefault("session.cookieName", "auth")
 	v.SetDefault("rateLimit.loginPerMinute", 10)
 	v.SetDefault("rateLimit.callbackPerMinute", 20)
 	v.SetDefault("rateLimit.refreshPerMinute", 30)
-	v.SetDefault("bootstrap.installLockFile", "logs/install.lock")
+	v.SetDefault("bootstrap.installLockFile", "install.lock")
 }
 func Validate(c Config) error {
 	if c.App.Environment != "development" && c.App.Environment != "test" && c.App.Environment != "production" {

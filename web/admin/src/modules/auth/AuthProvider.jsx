@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { authApi, markExplicitLogout, restoreLoginPath, subscribeToAuthChanges } from "./api.js";
-import { oidcAccountURL } from "../../platform/config/runtime.js";
+import { loadRuntimeConfig, oidcAccountURL } from "../../platform/config/runtime.js";
 
 const AuthContext = createContext(null);
 
@@ -22,6 +22,7 @@ export function AuthProvider({ children }) {
     let cancelled = false;
     async function initialize() {
       try {
+        await loadRuntimeConfig();
         const session = await authApi.session();
         if (cancelled) return;
         if (!session.authenticated) { setState({ status: "unauthenticated" }); return; }

@@ -86,7 +86,7 @@ components:
     sessionCookie:
       type: apiKey
       in: cookie
-      name: auth_template_session
+      name: auth
   responses:
     Unauthorized:
       description: Missing or expired session

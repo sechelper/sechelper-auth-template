@@ -22,7 +22,7 @@
 
 配置中心由 `configuration_entries` 表和管理端 `/admin/configuration` 页面提供。键名必须是大写环境变量格式，例如 `IDENTITY_CLIENT_ID` 或业务模块自定义的 `PAYMENT_TIMEOUT_SECONDS`；禁止保存 `DATABASE_URL`、`REDIS_URL` 及其密码。值使用会话加密密钥进行 AES-GCM 加密后保存；敏感值默认开启，列表、详情和审计事件均不返回明文。
 
-管理端读取配置需要 `configuration:read`，新增、替换和删除需要 `configuration:write`。修改会记录 `SECURITY_CONFIGURATION_CHANGED` 审计事件。配置中心使用启动阶段由环境注入的 bootstrap 数据库连接和加密密钥作为依赖，因此这两项不能依赖配置中心本身；安装密钥也只从部署环境注入。
+管理端读取配置需要 `configuration:read`，新增、替换和删除需要 `configuration:write`。业务配置列表只返回元数据；非敏感详情可返回明文供管理端回显，敏感详情始终返回空值，管理端只显示固定掩码。保存时未修改的敏感项不会将掩码提交回配置中心。修改会记录 `SECURITY_CONFIGURATION_CHANGED` 审计事件。配置中心使用启动阶段由环境注入的 bootstrap 数据库连接和加密密钥作为依赖，因此这两项不能依赖配置中心本身；安装密钥也只从部署环境注入。
 
 服务启动时先使用配置文件中的非敏感启动结构和环境注入的 bootstrap 数据库连接读取并解密配置中心，再覆盖可运行时调整的框架配置并重新构建 Redis、身份客户端、Session、日志和 HTTP 依赖。数据库连接、配置中心加密密钥、安装密钥、应用版本、构建信息和配置文件路径不允许由配置中心改变。安装模式不使用独立的环境变量开关，而由环境注入的 bootstrap 安装密钥和配置中心安装标记共同决定。
 

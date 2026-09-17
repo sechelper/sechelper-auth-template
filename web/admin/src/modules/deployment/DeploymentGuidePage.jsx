@@ -37,16 +37,45 @@ const variableDefinitions = [
   ["DEBUG", "调试开关", false, "false"],
 ];
 const emptyValues = () => Object.fromEntries(variableDefinitions.map(([key]) => [key, ""]));
+const SECRET_MASK = "••••••••";
 
 export function DeploymentGuidePage() {
   const [values, setValues] = useState(emptyValues);
+  const [existing, setExisting] = useState({});
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saved, setSaved] = useState(null);
 
+  const loadVariables = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await configurationApi.list();
+      const entries = Object.fromEntries((result.data || []).map((entry) => [entry.key, entry]));
+      const loaded = emptyValues();
+      for (const [key, , isSecret] of variableDefinitions) {
+        const entry = entries[key];
+        if (!entry) continue;
+        if (!isSecret) {
+          const value = await configurationApi.get(key);
+          loaded[key] = value.data?.value || "";
+        }
+      }
+      setValues(loaded);
+      setExisting(entries);
+    } catch (value) {
+      setError(value);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadVariables(); }, []);
+
   const saveVariables = async (event) => {
     event.preventDefault();
-    const entries = variableDefinitions.filter(([key]) => values[key]);
+    const entries = variableDefinitions.filter(([key, , isSecret]) => values[key] && !(isSecret && values[key] === SECRET_MASK));
     if (!entries.length) return;
     setBusy(true);
     setError(null);
@@ -57,7 +86,7 @@ export function DeploymentGuidePage() {
         await configurationApi.save(key, { value: values[key], isSecret, description: label });
         savedCount += 1;
       }
-      setValues(emptyValues());
+      await loadVariables();
       setSaved(`已保存 ${savedCount} 项配置到配置中心`);
     } catch (value) {
       setError(`已保存 ${savedCount} 项；后续保存失败：${value.message || "服务暂时不可用"}`);
@@ -66,17 +95,19 @@ export function DeploymentGuidePage() {
     }
   };
 
+  if (loading) return <Loading text="正在加载框架配置…" />;
+
   return <>
     <PageHeader code="PLATFORM" title="框架配置" description="填写框架环境变量并保存到配置中心。部署状态和版本信息位于概览页面。" />
     <section className="deployment-variable-card card">
-      <div className="deployment-guide-card-heading"><div><h2>框架环境变量</h2><p>填写后将加密保存到配置中心；空字段跳过，已有敏感值不会回显。</p></div></div>
+      <div className="deployment-guide-card-heading"><div><h2>框架环境变量</h2><p>已保存的普通值会回显；敏感值只显示掩码，原文不会返回浏览器。空字段跳过，未修改的敏感值不会被覆盖。</p></div></div>
       {saved && <div className="deployment-save-success" role="status">{saved}</div>}
       {error && <div className="configuration-inline-error" role="alert">{error}</div>}
       <form className="deployment-variable-form" onSubmit={saveVariables}>
         <div className="deployment-variable-grid">{variableDefinitions.map(([key, label, isSecret, placeholder]) => <label key={key}>
           <span><strong>{label}</strong><code>{key}</code></span>
-          <input type={isSecret ? "password" : "text"} value={values[key]} onChange={(event) => setValues({ ...values, [key]: event.target.value })} placeholder={placeholder} autoComplete="new-password" />
-          <small>{isSecret ? "敏感值将加密保存，保存后不可回显。" : "保存后在下一次服务启动时生效。"}</small>
+          <input type={isSecret ? "password" : "text"} value={values[key]} onChange={(event) => setValues({ ...values, [key]: event.target.value })} placeholder={isSecret && existing[key] ? SECRET_MASK : placeholder} autoComplete="new-password" />
+          <small>{isSecret ? (existing[key] ? "已保存敏感值，仅显示掩码；留空或保持掩码表示不修改。" : "敏感值将加密保存，保存后只显示掩码。") : (existing[key] ? "当前值已回显；保存后在下一次服务启动时生效。" : "保存后在下一次服务启动时生效。")}</small>
         </label>)}</div>
         <div className="deployment-variable-actions"><button className="configuration-primary-button" type="submit" disabled={busy}>{busy ? "保存中…" : "保存到配置中心"}</button><span>需要 configuration:write 权限</span></div>
       </form>

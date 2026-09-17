@@ -62,7 +62,7 @@ make run ENV=production ACTION=migrate
 
 首次安装页面 `/install` 不提供公开状态接口。Nginx 通过内部 `/internal/install-guard` 向 API 查询安装标记：未安装时放行静态安装页面，安装完成后将访问重定向到首页；安装 API 不受 Nginx 权限控制，直接由 Go 服务处理。安装 API 成功前会创建 `bootstrap.installLockFile` 指定的服务端锁文件，检测到锁文件时返回 500 `INSTALL_LOCKED`，并拒绝任何后续安装请求。
 
-发布后应先打开部署引导页面确认所有检查为“正常”，再继续配置业务 Key。若配置中心迁移或数据表检查失败，应先执行 `make run ENV=<environment> ACTION=migrate`，不得通过页面绕过迁移或直接修改数据库结构。数据库、Redis、身份平台和 Session 等基础设施配置修改后，仍需按本文件的受控重启流程生效。
+发布后应先打开部署引导页面确认所有检查为“正常”，再继续配置业务 Key。框架配置页会回显已保存的非敏感环境变量；密码、Token、密钥和连接字符串等敏感值只显示掩码，原文不会返回浏览器。若配置中心迁移或数据表检查失败，应先执行 `make run ENV=<environment> ACTION=migrate`，不得通过页面绕过迁移或直接修改数据库结构。数据库、Redis、身份平台和 Session 等基础设施配置修改后，仍需按本文件的受控重启流程生效。
 
 ## 前后台发布
 

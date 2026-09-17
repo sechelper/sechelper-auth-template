@@ -368,7 +368,7 @@ paths:
       x-required-permission: configuration:read
       responses:
         '200':
-          description: Configuration metadata; values are never returned by this endpoint
+          description: Configuration metadata; values are not returned by this endpoint. Clients may use the detail endpoint for non-secret values only.
           content:
             application/json:
               schema:
@@ -387,11 +387,11 @@ paths:
         schema: { type: string, pattern: '^[A-Z][A-Z0-9_]{0,127}$' }
     get:
       operationId: getConfigurationEntry
-      summary: Read configuration metadata
+      summary: Read configuration metadata and non-secret value
       security: [{ sessionCookie: [] }]
       x-required-permission: configuration:read
       responses:
-        '200': { description: Entry metadata; secret values are blank }
+        '200': { description: Entry metadata and value for non-secret entries; secret values are always blank }
         '404': { description: Entry not found }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }

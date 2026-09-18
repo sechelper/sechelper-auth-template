@@ -37,6 +37,18 @@ for path in "${required_paths[@]}"; do
   fi
 done
 
+business_reset_script="deploy/scripts/reset-business-schema.sh"
+if [[ ! -x "$business_reset_script" ]]; then
+  printf 'business schema reset script must exist and be executable: %s\n' "$business_reset_script" >&2
+  exit 2
+fi
+check_no_matches "business reset script contains database-wide or protected-schema destruction" \
+  'DROP DATABASE|DROP SCHEMA[^;]*(configuration|framework|public)' \
+  "$business_reset_script"
+check_no_matches "business reset script accepts an unrestricted schema target" \
+  'SCHEMA_NAME|TARGET_SCHEMA|SCHEMA=|DROP SCHEMA \$' \
+  "$business_reset_script"
+
 check_no_matches "framework-to-business dependency detected" \
   'internal/business|examples/' \
   api/internal/platform api/internal/modules/authentication \

@@ -71,12 +71,12 @@ func (s *Service) DeploymentGuide(ctx context.Context) DeploymentGuide {
 		guide.Checks = append(guide.Checks, DeploymentCheck{Name: "databaseConnectivity", Status: "healthy", Message: "数据库连接正常"})
 	}
 	var tableExists, migrationExists bool
-	if err := s.db.QueryRowContext(checkCtx, `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='configuration_entries')`).Scan(&tableExists); err != nil {
+	if err := s.db.QueryRowContext(checkCtx, `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='configuration' AND table_name='configuration_entries')`).Scan(&tableExists); err != nil {
 		guide.Checks = append(guide.Checks, DeploymentCheck{Name: "configurationTable", Status: "unavailable", Message: "无法检查配置中心表"})
 	} else {
 		guide.Checks = append(guide.Checks, DeploymentCheck{Name: "configurationTable", Status: checkStatus(tableExists), Message: "配置中心数据表"})
 	}
-	if err := s.db.QueryRowContext(checkCtx, `SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version='008_configuration_center.sql')`).Scan(&migrationExists); err != nil {
+	if err := s.db.QueryRowContext(checkCtx, `SELECT EXISTS (SELECT 1 FROM framework.schema_migrations WHERE scope='configuration' AND version='008_configuration_center.sql')`).Scan(&migrationExists); err != nil {
 		guide.Checks = append(guide.Checks, DeploymentCheck{Name: "configurationMigration", Status: "unavailable", Message: "无法检查配置迁移"})
 	} else {
 		guide.Checks = append(guide.Checks, DeploymentCheck{Name: "configurationMigration", Status: checkStatus(migrationExists), Message: "配置中心迁移"})

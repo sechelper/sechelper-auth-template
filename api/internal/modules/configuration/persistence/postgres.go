@@ -11,7 +11,7 @@ type Repository struct{ db *sql.DB }
 func NewRepository(db *sql.DB) *Repository { return &Repository{db: db} }
 
 func (r *Repository) List(ctx context.Context) ([]domain.Entry, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT key, description, is_secret, version, updated_by, updated_at FROM configuration_entries ORDER BY key`)
+	rows, err := r.db.QueryContext(ctx, `SELECT key, description, is_secret, version, updated_by, updated_at FROM configuration.configuration_entries ORDER BY key`)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +28,7 @@ func (r *Repository) List(ctx context.Context) ([]domain.Entry, error) {
 }
 
 func (r *Repository) Values(ctx context.Context) (map[string]string, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT key, ciphertext FROM configuration_entries`)
+	rows, err := r.db.QueryContext(ctx, `SELECT key, ciphertext FROM configuration.configuration_entries`)
 	if err != nil {
 		return nil, err
 	}
@@ -46,19 +46,19 @@ func (r *Repository) Values(ctx context.Context) (map[string]string, error) {
 
 func (r *Repository) Get(ctx context.Context, key string) (domain.Value, error) {
 	var value domain.Value
-	err := r.db.QueryRowContext(ctx, `SELECT key, description, is_secret, version, updated_by, updated_at, ciphertext FROM configuration_entries WHERE key=$1`, key).
+	err := r.db.QueryRowContext(ctx, `SELECT key, description, is_secret, version, updated_by, updated_at, ciphertext FROM configuration.configuration_entries WHERE key=$1`, key).
 		Scan(&value.Key, &value.Description, &value.IsSecret, &value.Version, &value.UpdatedBy, &value.UpdatedAt, &value.Value)
 	return value, err
 }
 
 func (r *Repository) Upsert(ctx context.Context, key, description string, secret bool, ciphertext, updatedBy string) (domain.Entry, error) {
 	var value domain.Entry
-	err := r.db.QueryRowContext(ctx, `INSERT INTO configuration_entries(key, description, is_secret, ciphertext, updated_by) VALUES($1,$2,$3,$4,$5) ON CONFLICT(key) DO UPDATE SET description=EXCLUDED.description, is_secret=EXCLUDED.is_secret, ciphertext=EXCLUDED.ciphertext, version=configuration_entries.version+1, updated_by=EXCLUDED.updated_by, updated_at=CURRENT_TIMESTAMP RETURNING key, description, is_secret, version, updated_by, updated_at`, key, description, secret, ciphertext, updatedBy).
+	err := r.db.QueryRowContext(ctx, `INSERT INTO configuration.configuration_entries(key, description, is_secret, ciphertext, updated_by) VALUES($1,$2,$3,$4,$5) ON CONFLICT(key) DO UPDATE SET description=EXCLUDED.description, is_secret=EXCLUDED.is_secret, ciphertext=EXCLUDED.ciphertext, version=configuration.configuration_entries.version+1, updated_by=EXCLUDED.updated_by, updated_at=CURRENT_TIMESTAMP RETURNING key, description, is_secret, version, updated_by, updated_at`, key, description, secret, ciphertext, updatedBy).
 		Scan(&value.Key, &value.Description, &value.IsSecret, &value.Version, &value.UpdatedBy, &value.UpdatedAt)
 	return value, err
 }
 
 func (r *Repository) Delete(ctx context.Context, key string) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM configuration_entries WHERE key=$1`, key)
+	_, err := r.db.ExecContext(ctx, `DELETE FROM configuration.configuration_entries WHERE key=$1`, key)
 	return err
 }

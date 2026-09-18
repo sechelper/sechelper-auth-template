@@ -17,7 +17,7 @@ Key 必须使用大写环境变量格式：首字符为大写字母，后续只�
 
 ## 管理员配置步骤
 
-1. 执行数据库迁移，确认 `configuration_entries` 已创建。
+1. 执行数据库迁移，确认 `configuration.configuration_entries` 已创建。
 2. 为管理员授予 `configuration:read`，如需写入再授予 `configuration:write`。
 3. 打开 `/admin/configuration`。
 4. 输入 Key、Value 和说明，敏感凭据保持“敏感值”选中。

@@ -68,6 +68,27 @@ func TestMigrationModuleKindDefaultsAndOptInPolicy(t *testing.T) {
 	}
 }
 
+func TestMigrationScope(t *testing.T) {
+	dir := t.TempDir()
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "framework", path: filepath.Join(dir, "001_authentication.sql"), want: "framework"},
+		{name: "configuration", path: filepath.Join(dir, "008_configuration_center.sql"), want: "configuration"},
+		{name: "business", path: filepath.Join(dir, "business", "billing", "001_billing.sql"), want: "business_billing"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := migrationScope(dir, test.path)
+			if err != nil || got != test.want {
+				t.Fatalf("migrationScope() = %q, %v; want %q", got, err, test.want)
+			}
+		})
+	}
+}
+
 func writeMigration(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

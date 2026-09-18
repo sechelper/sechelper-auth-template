@@ -241,7 +241,7 @@ func (m *Module) timeoutSeconds(ctx context.Context) (int, error) {
 | 配置中心 | `ConfigurationProvider.Get(ctx, key)` | 不读环境变量、配置文件或配置中心表 |
 | API 错误协议 | 宿主 HTTP 错误封装 | 不自建另一套公共错误格式 |
 | 审计注册 | `RegisterAuditEvents` 和宿主审计 Recorder | 只记录关键安全/业务动作，不记录普通读取 |
-| 数据迁移 | `api/migrations/business/<module>/` | 只新增前向迁移，不修改历史迁移或框架表 |
+| 数据迁移 | `api/migrations/business/<module>/` | 只新增前向迁移；迁移器自动写入 `business_<module>` schema，不得写入 `public` 或其他业务 schema |
 | 日志与指标 | 使用宿主注入的日志/指标边界（如模块装配已提供） | 脱敏；不记录密码、Token、Cookie 和完整个人数据 |
 | 数据库与事务 | 由宿主装配依赖并在 use case 中使用 | 事务覆盖同一业务写操作，不能创建全局连接 |
 | 前端运行时配置 | `GET /v1/runtime-config` 的非敏感白名单 | 不把秘密或业务私密配置发给浏览器 |

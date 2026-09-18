@@ -15,7 +15,7 @@ type Repository struct{ db *sql.DB }
 func NewRepository(db *sql.DB) *Repository { return &Repository{db: db} }
 func (r *Repository) Record(ctx context.Context, value domain.Event) error {
 	metadata, _ := json.Marshal(value.Metadata)
-	_, err := r.db.ExecContext(ctx, `INSERT INTO audit_events (id, occurred_at, event_type, category, severity, outcome, reason_code, actor_subject, actor_email, application_code, action, resource_type, resource_id, result, request_id, correlation_id, source, ip_hash, user_agent, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`, value.ID, value.OccurredAt, value.EventType, value.Category, value.Severity, value.Outcome, value.ReasonCode, value.ActorSubject, value.ActorEmail, value.ApplicationCode, value.Action, value.ResourceType, value.ResourceID, value.Outcome, value.RequestID, value.CorrelationID, value.Source, value.IPHash, value.UserAgent, metadata)
+	_, err := r.db.ExecContext(ctx, `INSERT INTO framework.audit_events (id, occurred_at, event_type, category, severity, outcome, reason_code, actor_subject, actor_email, application_code, action, resource_type, resource_id, result, request_id, correlation_id, source, ip_hash, user_agent, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`, value.ID, value.OccurredAt, value.EventType, value.Category, value.Severity, value.Outcome, value.ReasonCode, value.ActorSubject, value.ActorEmail, value.ApplicationCode, value.Action, value.ResourceType, value.ResourceID, value.Outcome, value.RequestID, value.CorrelationID, value.Source, value.IPHash, value.UserAgent, metadata)
 	return err
 }
 func (r *Repository) List(ctx context.Context, filter application.ListFilter) ([]domain.Event, error) {
@@ -49,7 +49,7 @@ func (r *Repository) List(ctx context.Context, filter application.ListFilter) ([
 		filter.Limit = 100
 	}
 	args = append(args, filter.Limit)
-	query := fmt.Sprintf(`SELECT id, occurred_at, event_type, category, severity, COALESCE(NULLIF(outcome,''), result), reason_code, actor_subject, actor_email, application_code, resource_type, resource_id, action, request_id, correlation_id, source, ip_hash, user_agent, metadata FROM audit_events WHERE %s ORDER BY occurred_at DESC, id DESC LIMIT $%d`, strings.Join(conditions, " AND "), len(args))
+	query := fmt.Sprintf(`SELECT id, occurred_at, event_type, category, severity, COALESCE(NULLIF(outcome,''), result), reason_code, actor_subject, actor_email, application_code, resource_type, resource_id, action, request_id, correlation_id, source, ip_hash, user_agent, metadata FROM framework.audit_events WHERE %s ORDER BY occurred_at DESC, id DESC LIMIT $%d`, strings.Join(conditions, " AND "), len(args))
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err

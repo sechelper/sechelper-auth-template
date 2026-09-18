@@ -1,5 +1,7 @@
 # 配置契约
 
+数据库使用一个项目专用 PostgreSQL 数据库，并按职责隔离 schema：框架表位于 `framework`，配置中心表位于 `configuration`，业务模块表位于 `business_<module>`。配置中心的 bootstrap 数据库连接只负责建立初始连接，不能从尚未加载的配置中心读取。
+
 应用配置由根目录 `config.yaml`（模板为 [`config.example.yaml`](../config.example.yaml)）定义，Go 服务通过独立的 Viper 实例在启动时读取一次、严格反序列化并完成语义校验。启动参数 `--config <path>` 优先级最高，其次是 `APP_CONFIG_FILE` 选择配置文件路径；配置文件同目录存在 `.env` 时会作为本地/测试敏感配置输入读取，显式进程环境变量优先。服务运行配置只来自 YAML、bootstrap 环境输入和配置中心。
 
 配置优先级为：代码默认值 < `config.yaml` < `.env` 中的 bootstrap/数据库/Redis 连接配置 < 配置中心运行配置。配置中心在服务启动阶段加载并覆盖运行时框架配置；`.env` 不覆盖配置中心中的 OIDC、Session、日志、限流和业务配置。
@@ -20,7 +22,7 @@
 
 ## 配置中心
 
-配置中心由 `configuration_entries` 表和管理端 `/admin/configuration` 页面提供。键名必须是大写环境变量格式，例如 `IDENTITY_CLIENT_ID` 或业务模块自定义的 `PAYMENT_TIMEOUT_SECONDS`；禁止保存 `DATABASE_URL`、`REDIS_URL` 及其密码。值使用会话加密密钥进行 AES-GCM 加密后保存；敏感值默认开启，列表、详情和审计事件均不返回明文。
+配置中心由 `configuration.configuration_entries` 表和管理端 `/admin/configuration` 页面提供。键名必须是大写环境变量格式，例如 `IDENTITY_CLIENT_ID` 或业务模块自定义的 `PAYMENT_TIMEOUT_SECONDS`；禁止保存 `DATABASE_URL`、`REDIS_URL` 及其密码。值使用会话加密密钥进行 AES-GCM 加密后保存；敏感值默认开启，列表、详情和审计事件均不返回明文。
 
 管理端读取配置需要 `configuration:read`，新增、替换和删除需要 `configuration:write`。业务配置列表只返回元数据；非敏感详情可返回明文供管理端回显，敏感详情始终返回空值，管理端只显示固定掩码。保存时未修改的敏感项不会将掩码提交回配置中心。修改会记录 `SECURITY_CONFIGURATION_CHANGED` 审计事件。配置中心使用启动阶段由环境注入的 bootstrap 数据库连接和加密密钥作为依赖，因此这两项不能依赖配置中心本身；安装密钥也只从部署环境注入。
 

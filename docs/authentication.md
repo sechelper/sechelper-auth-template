@@ -32,7 +32,7 @@
 
 前台和管理后台各自编译，但都向业务暴露相同的框架认证能力：`login`、`logout`、`refreshSession`、当前用户状态和用户中心链接。登录路径保存、静默登录标记、退出后的本地状态清理、后台登录保护和退出后的回到应用首页均由框架认证 Provider 负责，业务页面不重复实现认证流程。
 
-当前代码已提供 PostgreSQL Session Store。登录事务的 state、nonce 和 PKCE verifier 已保存到 `authentication_login_transactions`，回调通过一次性 DELETE 原子消费，支持多实例回调并防止 state 重放。Session 通过 `version` 字段进行乐观并发控制，刷新写回使用版本条件；跨实例冲突会拒绝旧版本更新。数据库结构必须先通过独立迁移命令完成；API 启动时只检查数据库连通性，不再隐式修改 schema。Redis、多实例缓存广播和远端 Token 撤销仍需在统一认证平台契约确认后实现。
+当前代码已提供 PostgreSQL Session Store。登录事务的 state、nonce 和 PKCE verifier 已保存到 `framework.authentication_login_transactions`，回调通过一次性 DELETE 原子消费，支持多实例回调并防止 state 重放。Session 通过 `version` 字段进行乐观并发控制，刷新写回使用版本条件；跨实例冲突会拒绝旧版本更新。数据库结构必须先通过独立迁移命令完成；API 启动时只检查数据库连通性，不再隐式修改 schema。Redis、多实例缓存广播和远端 Token 撤销仍需在统一认证平台契约确认后实现。
 
 `/v1/auth/login`、`/v1/auth/callback` 和 `/v1/auth/refresh` 由 `rateLimit` 配置限流。生产使用 Redis 计数器，开发环境在未配置 Redis 时使用进程内计数器；超过限制返回 `429 RATE_LIMITED` 和 `Retry-After`。
 

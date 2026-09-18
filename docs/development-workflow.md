@@ -18,7 +18,7 @@ API 与迁移程序均通过 `--config` 指定配置文件。配置由统一配�
 
 ## 迁移隔离
 
-业务迁移按模块目录组织。每个模块可通过 `MODULE_KIND` 声明 `production` 或 `example`；未声明时按生产模块处理。生产构建只打包生产迁移，测试/开发构建可包含示例迁移。迁移程序在生产环境拒绝示例迁移，即使文件意外存在也不会执行。迁移版本名在全局账本中必须唯一。
+业务迁移按模块目录组织。每个模块可通过 `MODULE_KIND` 声明 `production` 或 `example`；未声明时按生产模块处理。生产构建只打包生产迁移，测试/开发构建可包含示例迁移。迁移程序在生产环境拒绝示例迁移，即使文件意外存在也不会执行。框架迁移写入 `framework` schema，配置中心迁移写入 `configuration` schema，`business/<module>/` 迁移写入 `business_<module>` schema。迁移账本为 `framework.schema_migrations`，版本键为 `(scope, version)`；业务 SQL 不得依赖 `public` schema 或未限定的跨模块表。
 
 ## 常用验证
 

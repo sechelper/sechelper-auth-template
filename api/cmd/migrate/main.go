@@ -39,7 +39,14 @@ func main() {
 	if err := db.PingContext(ctx); err != nil {
 		fail(err)
 	}
-	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+	var legacyPublicTables bool
+	if err := db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('schema_migrations', 'authentication_sessions', 'authentication_login_transactions', 'authorization_manifest_state', 'audit_events', 'platform_users', 'external_identities', 'configuration_entries'))`).Scan(&legacyPublicTables); err != nil {
+		fail(fmt.Errorf("inspect legacy public tables: %w", err))
+	}
+	if legacyPublicTables {
+		fail(fmt.Errorf("legacy public-schema application tables detected; recreate the project database before running schema-isolated migrations"))
+	}
+	if _, err := db.ExecContext(ctx, `CREATE SCHEMA IF NOT EXISTS framework; CREATE TABLE IF NOT EXISTS framework.schema_migrations (scope TEXT NOT NULL, version TEXT NOT NULL, checksum TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (scope, version))`); err != nil {
 		fail(err)
 	}
 	// Serialize migration runners across replicas. The advisory lock is held
@@ -79,13 +86,20 @@ func main() {
 		if !apply {
 			continue
 		}
+		scope, err := migrationScope(dir, path)
+		if err != nil {
+			fail(err)
+		}
+		if _, err := db.ExecContext(ctx, `CREATE SCHEMA IF NOT EXISTS `+scope); err != nil {
+			fail(fmt.Errorf("create migration schema %s: %w", scope, err))
+		}
 		contents, err := os.ReadFile(path)
 		if err != nil {
 			fail(err)
 		}
 		checksum := fmt.Sprintf("%x", sha256.Sum256(contents))
 		var stored string
-		err = db.QueryRowContext(ctx, `SELECT checksum FROM schema_migrations WHERE version=$1`, name).Scan(&stored)
+		err = db.QueryRowContext(ctx, `SELECT checksum FROM framework.schema_migrations WHERE scope=$1 AND version=$2`, scope, name).Scan(&stored)
 		if err == nil {
 			if stored != checksum {
 				fail(fmt.Errorf("migration %s checksum changed", name))
@@ -99,8 +113,11 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		if _, err = tx.ExecContext(ctx, string(contents)); err == nil {
-			_, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, checksum) VALUES ($1,$2)`, name, checksum)
+		if _, err = tx.ExecContext(ctx, `SET LOCAL search_path TO `+scope); err == nil {
+			_, err = tx.ExecContext(ctx, string(contents))
+		}
+		if err == nil {
+			_, err = tx.ExecContext(ctx, `INSERT INTO framework.schema_migrations(scope, version, checksum) VALUES ($1,$2,$3)`, scope, name, checksum)
 		}
 		if err != nil {
 			_ = tx.Rollback()
@@ -111,6 +128,43 @@ func main() {
 		}
 		fmt.Println("applied", name)
 	}
+}
+
+func migrationScope(root, path string) (string, error) {
+	relativeDirectory, err := filepath.Rel(root, filepath.Dir(path))
+	if err != nil {
+		return "", err
+	}
+	relativeDirectory = filepath.ToSlash(relativeDirectory)
+	if relativeDirectory == "." {
+		if filepath.Base(path) == "008_configuration_center.sql" {
+			return "configuration", nil
+		}
+		return "framework", nil
+	}
+	if !strings.HasPrefix(relativeDirectory, "business/") {
+		return "", fmt.Errorf("migration %s is outside a supported schema scope", path)
+	}
+	module := strings.TrimPrefix(relativeDirectory, "business/")
+	if strings.Contains(module, "/") || module == "" || !isSafeIdentifier(module) {
+		return "", fmt.Errorf("invalid business migration module path %q", module)
+	}
+	return "business_" + module, nil
+}
+
+func isSafeIdentifier(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, char := range value {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '_' {
+			return false
+		}
+		if index == 0 && (char < 'a' || char > 'z') {
+			return false
+		}
+	}
+	return true
 }
 
 func collectMigrations(dir string) ([]string, error) {

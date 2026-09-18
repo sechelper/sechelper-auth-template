@@ -27,6 +27,14 @@ platform identity client -> authentication application
 
 第一阶段已建立认证登录、回调、会话查询、登出、refresh token 刷新、AES-GCM 密文存储、PKCE 生成、CSRF 双提交校验、PostgreSQL Session Store、授权上下文、授权缓存、权限中间件、Manifest 远程同步和平台 Dashboard。共享授权缓存和远端 Token 撤销仍属于后续实现。
 
+## PostgreSQL schema 隔离
+
+每个环境使用一个项目专用 PostgreSQL 数据库，但数据库对象按职责放入独立 schema：框架对象使用 `framework`，配置中心使用 `configuration`，业务模块使用 `business_<module>`（例如 `business_orders`）。运行时 SQL 必须显式使用 schema-qualified 名称，不依赖连接默认的 `search_path` 来实现边界。
+
+迁移器在数据库中创建这些 schema，并在每个迁移事务内只将当前迁移的目标 schema 放入临时 `search_path`。迁移账本统一存放在 `framework.schema_migrations`，通过 `(scope, version)` 唯一标识，避免不同 schema 的迁移版本相互冲突。配置中心仍依赖 bootstrap 数据库连接启动，但其数据只写入 `configuration.configuration_entries`。
+
+业务数据库重置是单向受限操作：唯一脚本只能根据模块名生成 `business_<module>` schema，并在执行前验证目标数据库存在 `framework` 基线。配置中心 schema、框架 schema、`public` schema 和数据库级销毁操作均被脚本和架构检查拒绝。
+
 ## 前后台入口与管理端
 
 项目使用一个 Go API 服务和两个独立的 React/Vite 前端项目：`web/` 负责 `/` 前台，`web/admin/` 负责 `/admin` 后台。两个项目共用同一域名、HttpOnly Session Cookie、CSRF 机制和 `/v1/` API，但拥有独立的入口、依赖、构建配置、构建产物、布局和导航边界。公共前台明确分为 `web/src/framework/` 与 `web/src/business/`：框架目录负责应用壳、认证、运行时配置、基础样式、全局错误和业务路由调度。正式首页必须由真实业务模块提供，框架不提供正式首页回退。当前 `profile-example` 是开发/测试演示模块，不是真实业务，也不参与正式路由发现；当前没有真实业务首页，因此正式构建会失败关闭，直到真实业务模块声明 `/`。项目业务页面只能位于 `web/src/business/<module>/`。

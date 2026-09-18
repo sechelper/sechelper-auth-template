@@ -38,7 +38,11 @@ development/production 构建产物包括 API/迁移 Docker 镜像、含前台�
 
 构建和依赖安装的工作目录不写入仓库。Go 测试缓存、test 构建临时文件、test 产物及 artifact manifest 放在操作系统临时目录；Docker 镜像本身由 Docker 管理。development/production 应用运行配置由 Compose 显式挂载的 `config.yaml` 路径选择；test 服务继续由测试主机现有 systemd 单元加载运行配置，日志与运行状态遵循该配置及其可写路径约定。
 
-数据库结构由独立迁移命令管理，API 进程不会在启动时执行 DDL。首次运行或发布新版本前执行：
+数据库结构由独立迁移命令管理，API 进程不会在启动时执行 DDL。首次运行或发布新版本前执行。迁移器会创建 `framework`、`configuration` 及启用业务模块对应的 `business_<module>` schema；框架迁移账本位于 `framework.schema_migrations`，配置中心表位于 `configuration.configuration_entries`，业务表不得落入 `public` schema：
+
+本次升级不提供旧 `public` schema 的数据兼容迁移。迁移器检测到旧的 `public.schema_migrations` 或旧应用表时会拒绝继续；执行前必须按环境备份并重建项目数据库，再运行全量迁移。
+
+业务数据重置只能使用 `deploy/scripts/reset-business-schema.sh`。脚本强制要求 `BUSINESS_DATABASE_URL` 和 `BUSINESS_MODULE`，只允许重建 `business_<module>` schema；它会拒绝配置中心、框架、`public` 或未初始化的数据库目标，不接受 `DROP DATABASE` 操作。配置中心 schema 和配置中心数据库没有任何业务 reset 入口。
 
 ```bash
 make run ENV=production ACTION=migrate

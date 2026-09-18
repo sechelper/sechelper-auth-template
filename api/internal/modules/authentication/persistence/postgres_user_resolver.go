@@ -28,10 +28,10 @@ func (r *PostgresUserResolver) ResolveOrCreate(ctx context.Context, issuer, subj
 		return "", err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO platform_users (id) VALUES ($1::uuid)`, localID); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO framework.platform_users (id) VALUES ($1::uuid)`, localID); err != nil {
 		return "", err
 	}
-	result, err := tx.ExecContext(ctx, `INSERT INTO external_identities (issuer, identity_subject, platform_user_uuid) VALUES ($1,$2,$3::uuid) ON CONFLICT (issuer, identity_subject) DO NOTHING`, issuer, subject, localID)
+	result, err := tx.ExecContext(ctx, `INSERT INTO framework.external_identities (issuer, identity_subject, platform_user_uuid) VALUES ($1,$2,$3::uuid) ON CONFLICT (issuer, identity_subject) DO NOTHING`, issuer, subject, localID)
 	if err != nil {
 		return "", err
 	}
@@ -44,7 +44,7 @@ func (r *PostgresUserResolver) ResolveOrCreate(ctx context.Context, issuer, subj
 			return "", err
 		}
 		var existing string
-		if err := r.db.QueryRowContext(ctx, `SELECT platform_user_uuid::text FROM external_identities WHERE issuer=$1 AND identity_subject=$2`, issuer, subject).Scan(&existing); err != nil {
+		if err := r.db.QueryRowContext(ctx, `SELECT platform_user_uuid::text FROM framework.external_identities WHERE issuer=$1 AND identity_subject=$2`, issuer, subject).Scan(&existing); err != nil {
 			return "", err
 		}
 		return existing, nil

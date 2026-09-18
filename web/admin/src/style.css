@@ -61,7 +61,7 @@ button:focus-visible, a:focus-visible { outline: 0; box-shadow: var(--sneat-focu
 .menu-group-items[hidden] { display: none; }
 .menu-group + .menu-group { position: relative; }
 .menu-group + .menu-group::before { display: none; width: 40px; height: 2px; margin: 10px auto 0; background: #aab5c1; content: ""; }
-.menu-subgroup-toggle { display: flex; align-items: center; gap: 12px; width: calc(100% - 30px); min-height: 42px; margin: 0 15px; padding: 10px 15px 10px 30px; border: 0; border-radius: 5px; color: var(--frest-menu-text); background: transparent; cursor: pointer; font: 400 15px/22px "IBM Plex Sans", var(--sneat-font-family); text-align: left; }
+.menu-subgroup-toggle { display: flex; align-items: center; gap: 12px; width: calc(100% - 30px); min-height: 42px; margin: 0 15px; padding: 10px 15px 10px 30px; overflow: hidden; border: 0; border-radius: 5px; color: var(--frest-menu-text); background: transparent; cursor: pointer; font: 400 15px/22px "IBM Plex Sans", var(--sneat-font-family); text-align: left; white-space: nowrap; }
 .menu-subgroup-toggle:hover { color: var(--frest-menu-primary); background: rgba(90,141,238,.08); }
 .menu-subgroup-toggle .nav-icon { width: 24px; height: 24px; flex: 0 0 24px; }
 .menu-subgroup-dot { color: #aab5c1; font-size: 1.4rem; line-height: .5; }

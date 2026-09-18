@@ -2,6 +2,8 @@
 
 授权注册和框架维护的权威边界见[授权框架维护](authorization-framework-maintenance.md)。本文档只保留业务模块纵向切片的实施步骤；当改动注册协议、授权语义或宿主组合根时，先按该文档升级为框架维护任务。
 
+API、登录/退出、用户资料、设置、配置中心和框架能力的详细接入规则见[业务 API 接入规范](business-api-integration.md)。本文档中的目录、步骤和验收清单必须与该规范一起阅读。
+
 新增业务能力时，后端、前端、数据库、接口契约和测试必须作为一个纵向切片交付。不要先创建全局 `handlers`、`services`、`repositories` 或 `utils` 目录。
 
 同一业务能力必须在后端、业务前台和管理前台使用完全相同的 `<module>` 目录名：`api/internal/business/<module>/`、`web/src/business/<module>/`、`web/admin/src/business/<module>/`。不需要某一端时可以不创建空目录，但不得使用别名拆散同一个业务模块。

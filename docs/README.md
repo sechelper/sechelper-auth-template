@@ -15,5 +15,6 @@
 - [AI 交接说明](ai-context.md)
 - [订单示例模块](orders.md)（仅示例，不属于框架正式运行路径）
 - [业务模块开发模板](business-module-template.md)
+- [业务 API 接入规范](business-api-integration.md)
 - [开发环境与质量门禁](development-workflow.md)
 - [OpenAPI](contracts/openapi.yaml)

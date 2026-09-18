@@ -26,3 +26,5 @@ logs/
 *.pem
 *.key
 *.crt
+
+testing-environment.md

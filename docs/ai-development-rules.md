@@ -33,6 +33,8 @@
 - `web/admin/src/business/<module>/**`（管理后台）
 - `docs/contracts/business/**`
 
+业务 API、认证会话、用户资料、统一身份中心设置、配置中心和框架能力的接入细则以 [`docs/business-api-integration.md`](business-api-integration.md) 为准。AI 或业务开发不得通过直接读取 Cookie、Token、Session Store、环境变量、配置中心表或身份平台 UserInfo 来绕过该规范。
+
 业务模块必须通过唯一后端注册边界和前端自描述文件接入。业务前台在 `web/src/business/<module>/public-module.js` 声明路由，管理后台在 `web/admin/src/business/<module>/admin-module.js` 声明路由、导航和权限；框架注册器自动发现这些固定文件，普通业务任务不得修改注册器、应用入口或全局路由。只有改变声明协议或发现机制时才提交框架扩展申请。前后台业务代码不得互相导入；后台路由必须位于 `/admin/` 并声明权限，前台路由不得进入 `/admin`。业务模块使用注入的 HTTP、事务、审计、授权、日志和配置接口，不得读取环境变量、创建全局连接、直接操作 Session Store 或自定义错误协议。
 
 用户身份及个人资料由统一认证平台作为唯一权威来源保存。业务模块不得将用户信息复制或持久化到业务数据库；如界面需要，可在浏览器端缓存展示所需信息，并在适当时机从统一认证平台刷新。浏览器缓存仅用于展示，不得作为认证、授权或用户信息权威性的依据。

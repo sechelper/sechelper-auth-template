@@ -13,9 +13,9 @@ type Module struct {
 }
 
 func New(service *application.Service, audit func(context.Context, string, string, string)) *Module {
-	return &Module{Service: service, Handler: configurationhttp.NewHandler(service, func(actor, action, key string) {
+	return &Module{Service: service, Handler: configurationhttp.NewHandler(service, func(ctx context.Context, actor, action, key string) {
 		if audit != nil {
-			audit(context.Background(), actor, action, key)
+			audit(ctx, actor, action, key)
 		}
 	})}
 }

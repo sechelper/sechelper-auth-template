@@ -165,7 +165,7 @@ func main() {
 		if err != nil {
 			return
 		}
-		_ = auditModule.Service.Record(ctx, plataudit.Event{ID: "evt-" + eventID, EventType: "SECURITY_CONFIGURATION_CHANGED", Outcome: "success", ActorSubject: actor, ApplicationCode: cfg.Identity.ApplicationCode, ResourceType: "configuration", ResourceID: key, Action: action, Source: "admin_ui"})
+		_ = auditModule.Service.Record(ctx, plataudit.Event{ID: "evt-" + eventID, EventType: "SECURITY_CONFIGURATION_CHANGED", Outcome: "success", ActorSubject: actor, ApplicationCode: cfg.Identity.ApplicationCode, ResourceType: "configuration", ResourceID: key, Action: action, RequestID: httpkit.RequestIDFromContext(ctx), Source: "admin_ui"})
 	})
 	installationModule := installation.New(configurationService, cfg.Bootstrap.InstallKey, cfg.Bootstrap.InstallLockFile, centerProtector)
 	authService.SetAuditRecorder(auditModule.Service)

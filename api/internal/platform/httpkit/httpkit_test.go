@@ -13,7 +13,9 @@ func TestRequestIDAndErrorEnvelopeAreConsistent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(RequestIDMiddleware())
+	var contextRequestID string
 	router.GET("/failure", func(c *gin.Context) {
+		contextRequestID = RequestIDFromContext(c.Request.Context())
 		WriteError(c, http.StatusUnprocessableEntity, Error{
 			Code:    "VALIDATION_FAILED",
 			Message: "Request fields are invalid",
@@ -32,6 +34,9 @@ func TestRequestIDAndErrorEnvelopeAreConsistent(t *testing.T) {
 	requestID := response.Header().Get("X-Request-ID")
 	if requestID == "" || requestID == "caller-controlled\r\ninjected" {
 		t.Fatalf("response request id was not server generated: %q", requestID)
+	}
+	if contextRequestID != requestID {
+		t.Fatalf("context request id = %q, want %q", contextRequestID, requestID)
 	}
 	var body errorEnvelope
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {

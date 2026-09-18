@@ -1,6 +1,7 @@
 package httpkit
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
@@ -9,6 +10,8 @@ import (
 )
 
 const requestIDKey = "httpkit.requestId"
+
+type requestIDContextKey struct{}
 
 type Error struct {
 	Code      string   `json:"code"`
@@ -36,9 +39,26 @@ func RequestIDMiddleware() gin.HandlerFunc {
 			id = "req-" + hex.EncodeToString(raw[:])
 		}
 		c.Set(requestIDKey, id)
+		c.Request = c.Request.WithContext(WithRequestID(c.Request.Context(), id))
 		c.Header("X-Request-ID", id)
 		c.Next()
 	}
+}
+
+// WithRequestID stores the server-owned request identifier in a standard
+// context so service-layer code can attach it to events without depending on
+// Gin.
+func WithRequestID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, requestIDContextKey{}, id)
+}
+
+// RequestIDFromContext returns the request identifier attached by the HTTP
+// middleware, or an empty string for non-HTTP/background work.
+func RequestIDFromContext(ctx context.Context) string {
+	if id, ok := ctx.Value(requestIDContextKey{}).(string); ok {
+		return id
+	}
+	return ""
 }
 
 func RequestID(c *gin.Context) string {

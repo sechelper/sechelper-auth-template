@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"database/sql"
 	"github.com/gin-gonic/gin"
 	stdhttp "net/http"
@@ -11,10 +12,10 @@ import (
 
 type Handler struct {
 	service *application.Service
-	audit   func(string, string, string)
+	audit   func(context.Context, string, string, string)
 }
 
-func NewHandler(service *application.Service, audit func(string, string, string)) *Handler {
+func NewHandler(service *application.Service, audit func(context.Context, string, string, string)) *Handler {
 	return &Handler{service: service, audit: audit}
 }
 func (h *Handler) List(c *gin.Context) {
@@ -65,7 +66,7 @@ func (h *Handler) Put(c *gin.Context) {
 		return
 	}
 	if h.audit != nil {
-		h.audit(actor, "updated", value.Key)
+		h.audit(c.Request.Context(), actor, "updated", value.Key)
 	}
 	c.JSON(stdhttp.StatusOK, gin.H{"data": value, "meta": gin.H{"restartRequired": true}})
 }
@@ -79,7 +80,7 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 	if h.audit != nil {
-		h.audit(actor, "deleted", c.Param("key"))
+		h.audit(c.Request.Context(), actor, "deleted", c.Param("key"))
 	}
 	c.Status(stdhttp.StatusNoContent)
 }

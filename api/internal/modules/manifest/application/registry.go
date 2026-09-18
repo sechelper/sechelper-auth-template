@@ -16,6 +16,12 @@ type Registry struct {
 	permissions     map[string]domain.Permission
 }
 
+var allowedRiskLevels = map[string]struct{}{
+	"normal":     {},
+	"privileged": {},
+	"critical":   {},
+}
+
 func NewRegistry(applicationCode string) *Registry {
 	return &Registry{applicationCode: applicationCode, permissions: map[string]domain.Permission{}}
 }
@@ -29,6 +35,9 @@ func (r *Registry) Register(p domain.Permission) error {
 	p.RiskLevel = strings.ToLower(strings.TrimSpace(p.RiskLevel))
 	if p.RiskLevel == "" {
 		p.RiskLevel = "normal"
+	}
+	if _, ok := allowedRiskLevels[p.RiskLevel]; !ok {
+		return fmt.Errorf("unsupported risk level %q: must be one of normal, privileged, critical", p.RiskLevel)
 	}
 	for i := range p.APIs {
 		p.APIs[i].Method = strings.ToUpper(strings.TrimSpace(p.APIs[i].Method))
@@ -59,6 +68,9 @@ func (r *Registry) Snapshot(version int64) (domain.Snapshot, string, error) {
 		p.RiskLevel = strings.ToLower(strings.TrimSpace(p.RiskLevel))
 		if p.RiskLevel == "" {
 			p.RiskLevel = "normal"
+		}
+		if _, ok := allowedRiskLevels[p.RiskLevel]; !ok {
+			return domain.Snapshot{}, "", fmt.Errorf("unsupported risk level %q: must be one of normal, privileged, critical", p.RiskLevel)
 		}
 		for i := range p.APIs {
 			p.APIs[i].Method = strings.ToUpper(strings.TrimSpace(p.APIs[i].Method))

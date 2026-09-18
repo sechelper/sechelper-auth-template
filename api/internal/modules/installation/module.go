@@ -30,16 +30,18 @@ func (m *Module) RegisterRoutes(router *gin.Engine) {
 	router.PUT("/v1/install/configuration", m.install)
 }
 func (m *Module) guard(c *gin.Context) {
+	if m.lockExists() {
+		// A completed installation must make the installer unavailable as a
+		// server-side state, rather than relying on the reverse proxy to hide it.
+		c.Status(http.StatusInternalServerError)
+		return
+	}
 	installed, err := m.service.IsInstalled(c.Request.Context())
 	if err != nil {
 		c.Status(http.StatusServiceUnavailable)
 		return
 	}
 	if installed || m.installKey == "" {
-		c.Status(http.StatusForbidden)
-		return
-	}
-	if m.lockExists() {
 		c.Status(http.StatusForbidden)
 		return
 	}

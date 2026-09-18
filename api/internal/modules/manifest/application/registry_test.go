@@ -36,3 +36,19 @@ func TestRegistryRejectsConflictingPermission(t *testing.T) {
 		t.Fatal("expected conflict")
 	}
 }
+
+func TestRegistryAllowsOnlyDefinedRiskLevels(t *testing.T) {
+	for _, riskLevel := range []string{"normal", "privileged", "critical", "PRIVILEGED"} {
+		r := NewRegistry("demo")
+		if err := r.Register(domain.Permission{Code: "demo:read", Name: "Read", RiskLevel: riskLevel}); err != nil {
+			t.Fatalf("risk level %q was rejected: %v", riskLevel, err)
+		}
+	}
+
+	for _, riskLevel := range []string{"high", "low", "custom"} {
+		r := NewRegistry("demo")
+		if err := r.Register(domain.Permission{Code: "demo:read", Name: "Read", RiskLevel: riskLevel}); err == nil {
+			t.Fatalf("risk level %q was accepted", riskLevel)
+		}
+	}
+}

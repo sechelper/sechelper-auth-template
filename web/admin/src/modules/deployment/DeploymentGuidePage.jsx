@@ -4,7 +4,7 @@ import { configurationApi } from "../configuration/api.js";
 
 const variableDefinitions = [
   ["APP_ENV", "app.environment / APP_ENV", false, "development"], ["APP_NAME", "应用名称", false, "auth-template"],
-  ["SERVER_HOST", "服务监听地址", false, "0.0.0.0"], ["SERVER_PORT", "服务端口", false, "8080"], ["SERVER_READ_TIMEOUT", "读取超时", false, "10s"], ["SERVER_WRITE_TIMEOUT", "写入超时", false, "15s"], ["SERVER_IDLE_TIMEOUT", "空闲超时", false, "60s"], ["SERVER_SHUTDOWN_TIMEOUT", "关闭超时", false, "15s"],
+  ["SERVER_READ_TIMEOUT", "读取超时", false, "10s"], ["SERVER_WRITE_TIMEOUT", "写入超时", false, "15s"], ["SERVER_IDLE_TIMEOUT", "空闲超时", false, "60s"], ["SERVER_SHUTDOWN_TIMEOUT", "关闭超时", false, "15s"],
   ["PUBLIC_WEB_ORIGIN", "前台域名", false, "https://example.com"],
   ["API_ORIGIN", "API 域名", false, "https://example.com"],
   ["PRIMARY_DOMAIN", "主域名", false, "example.com"],

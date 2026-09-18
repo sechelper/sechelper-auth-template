@@ -11,7 +11,6 @@ func TestLoadUsesExplicitConfigFileOnly(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://app:test@127.0.0.1:5432/auth_template?sslmode=disable")
 	t.Setenv("CONFIG_CENTER_ENCRYPTION_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
 	t.Setenv("CONFIG_CENTER_INSTALL_KEY", "test-install-key")
-	t.Setenv("SERVER_PORT", "18080")
 	path := filepath.Join("..", "..", "..", "..", "config.example.yaml")
 	c, err := Load("--config", path)
 	if err != nil {

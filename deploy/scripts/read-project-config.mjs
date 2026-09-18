@@ -11,11 +11,13 @@ export const readProjectConfig = (filePath = "project.yaml") => {
     const [, indent, key, value] = match;
     if (indent === "") {
       if (value) throw new Error(`${filePath}:${index + 1} top-level values must be sections`);
+      if (Object.prototype.hasOwnProperty.call(result, key)) throw new Error(`${filePath}:${index + 1} duplicates section ${key}`);
       section = key;
       result[section] = {};
     } else if (!section || !value) {
       throw new Error(`${filePath}:${index + 1} must contain a scalar value under a section`);
     } else {
+      if (Object.prototype.hasOwnProperty.call(result[section], key)) throw new Error(`${filePath}:${index + 1} duplicates ${section}.${key}`);
       result[section][key] = value.replace(/^['"]|['"]$/g, "");
     }
   }

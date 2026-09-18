@@ -20,11 +20,16 @@ if (!buildDate || !Number.isFinite(buildDate.valueOf()) || buildDate.toISOString
   fail("project.yaml release.buildId must be a valid UTC YYYYMMDDHHmmss timestamp");
 }
 
+const versionSource = fs.readFileSync("project.yaml", "utf8");
+if (!/^release:\s*$/m.test(versionSource) || !/^  version:\s*\S+\s*$/m.test(versionSource)) {
+  fail("project.yaml must contain the single canonical release.version source");
+}
+
 for (const root of ["web", "web/admin"]) {
   const manifest = JSON.parse(fs.readFileSync(`${root}/package.json`, "utf8"));
   const lock = JSON.parse(fs.readFileSync(`${root}/package-lock.json`, "utf8"));
   if (manifest.version !== release.releaseVersion || lock.version !== release.releaseVersion || lock.packages?.[""]?.version !== release.releaseVersion) {
-    fail(`${root} package.json and package-lock.json versions must be synchronized from project.yaml (${release.releaseVersion})`);
+    fail(`${root} generated package metadata is out of sync with project.yaml release.version (${release.releaseVersion}); run make release-sync`);
   }
 }
 

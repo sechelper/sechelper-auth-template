@@ -98,6 +98,7 @@ button:focus-visible, a:focus-visible { outline: 0; box-shadow: var(--sneat-focu
 .sidebar-hover-expanded .main { margin-left: 80px; }
 .sidebar-hover-expanded .sechelper-brand__copy, .sidebar-hover-expanded .menu-section, .sidebar-hover-expanded .nav-label { display: flex; }
 .sidebar-hover-expanded .nav-link { justify-content: flex-start; width: calc(100% - 30px); margin: 0 15px; padding: 10px 15px 10px 13px; }
+.sidebar-hover-expanded .menu-subgroup-toggle { padding-left: 28px; }
 .sidebar-hover-expanded .menu-subgroup > div:not([hidden]) .nav-link { width: 100%; margin-left: 0; margin-right: 0; padding-left: 35px; padding-right: 0; }
 .sidebar-hover-expanded .sidebar-collapse { left: 214px; background: transparent; transform: none; }
 .sidebar-collapsed:not(.sidebar-hover-expanded) .sechelper-brand__copy, .sidebar-collapsed:not(.sidebar-hover-expanded) .nav-label { opacity: 0; visibility: hidden; }

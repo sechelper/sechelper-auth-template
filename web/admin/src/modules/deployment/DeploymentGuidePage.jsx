@@ -3,7 +3,7 @@ import { Loading, PageHeader } from "../../app/components.jsx";
 import { configurationApi } from "../configuration/api.js";
 
 const variableDefinitions = [
-  ["APP_ENV", "app.environment / APP_ENV", false, "development"], ["APP_NAME", "应用名称", false, "auth-template"],
+  ["APP_ENV", "app.environment / APP_ENV", false, "development"], ["APP_NAME", "应用名称", false, ""],
   ["SERVER_READ_TIMEOUT", "读取超时", false, "10s"], ["SERVER_WRITE_TIMEOUT", "写入超时", false, "15s"], ["SERVER_IDLE_TIMEOUT", "空闲超时", false, "60s"], ["SERVER_SHUTDOWN_TIMEOUT", "关闭超时", false, "15s"],
   ["PUBLIC_WEB_ORIGIN", "前台域名", false, "https://example.com"],
   ["API_ORIGIN", "API 域名", false, "https://example.com"],
@@ -83,16 +83,32 @@ export function DeploymentGuidePage() {
     let savedCount = 0;
     try {
       for (const [key, label, isSecret] of entries) {
-        await configurationApi.save(key, { value: values[key], isSecret, description: label });
+        await configurationApi.saveFramework(key, { value: values[key], isSecret, description: label });
         savedCount += 1;
       }
+      const restart = await configurationApi.restartFramework();
+      setSaved(`已保存 ${savedCount} 项配置，正在重启服务并加载框架配置…`);
+      if (restart?.data?.restarting) await waitForRestart();
       await loadVariables();
-      setSaved(`已保存 ${savedCount} 项配置到配置中心`);
+      setSaved(`已保存 ${savedCount} 项配置，服务已重启并加载新配置`);
     } catch (value) {
       setError(`已保存 ${savedCount} 项；后续保存失败：${value.message || "服务暂时不可用"}`);
     } finally {
       setBusy(false);
     }
+  };
+
+  const waitForRestart = async () => {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      try {
+        const ready = await fetch("/readyz", { credentials: "same-origin", cache: "no-store" });
+        if (!ready.ok) continue;
+        const runtime = await fetch("/v1/runtime-config", { credentials: "same-origin", cache: "no-store" });
+        if (runtime.ok) return;
+      } catch { /* The service is expected to be unavailable during restart. */ }
+    }
+    throw new Error("服务重启后未在规定时间内恢复，请检查服务日志");
   };
 
   if (loading) return <Loading text="正在加载框架配置…" />;

@@ -83,6 +83,34 @@ func TestUpsertRejectsNonEnvironmentKeysAndBlankValues(t *testing.T) {
 	}
 }
 
+func TestBusinessConfigurationCannotChangeOrDeleteFrameworkVariables(t *testing.T) {
+	repository := newTestRepository()
+	service := NewService(repository, testProtector{})
+	if _, err := service.Upsert(context.Background(), "APP_NAME", "application name", false, "configured", "installer"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.UpsertBusiness(context.Background(), "APP_NAME", "changed", false, "other", "admin"); !errors.Is(err, ErrFrameworkVariable) {
+		t.Fatalf("business Upsert error = %v, want ErrFrameworkVariable", err)
+	}
+	if err := service.DeleteBusiness(context.Background(), "APP_NAME"); !errors.Is(err, ErrFrameworkVariable) {
+		t.Fatalf("business Delete error = %v, want ErrFrameworkVariable", err)
+	}
+	entry, err := service.Get(context.Background(), "APP_NAME")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !entry.IsFramework || entry.Value != "configured" {
+		t.Fatalf("framework entry = %+v, want read-only metadata and original value", entry)
+	}
+}
+
+func TestFrameworkConfigurationCanStillChangeFrameworkVariables(t *testing.T) {
+	service := NewService(newTestRepository(), testProtector{})
+	if _, err := service.Upsert(context.Background(), "APP_NAME", "application name", false, "configured", "admin"); err != nil {
+		t.Fatalf("framework Upsert() error = %v", err)
+	}
+}
+
 func TestMissingInstallKeysRejectsIncompleteFrameworkConfiguration(t *testing.T) {
 	missing := MissingInstallKeys([]InstallEntry{{Key: "APP_ENV", Value: "test"}})
 	if len(missing) == 0 {

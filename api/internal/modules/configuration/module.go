@@ -25,6 +25,10 @@ func (m *Module) RegisterRoutes(v1 *gin.RouterGroup, readAuth, writeAuth gin.Han
 	group.GET("/:key", readAuth, m.Handler.Get)
 	group.PUT("/:key", writeAuth, m.Handler.Put)
 	group.DELETE("/:key", writeAuth, m.Handler.Delete)
+	group.POST("/restart", writeAuth, m.Handler.Restart)
+	business := v1.Group("/admin/business-configuration")
+	business.PUT("/:key", writeAuth, m.Handler.PutBusiness)
+	business.DELETE("/:key", writeAuth, m.Handler.DeleteBusiness)
 }
 
 type Provider struct{ service *application.Service }

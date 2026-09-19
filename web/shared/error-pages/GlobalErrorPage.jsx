@@ -3,7 +3,7 @@ import "./error-pages.css";
 
 const defaults = { 403: ["暂无访问权限", "当前账号无法访问此页面。", "forbidden"], 404: ["页面不存在", "你访问的页面不存在。", "not-found"], 500: ["服务暂时不可用", "请稍后重试。", "server"] };
 
-function Handheld({ tone }) {
+function Handheld({ tone, brandName }) {
   const ref = useRef(null);
   useEffect(() => {
     const root = ref.current; const canvas = root.querySelector("canvas"); const ctx = canvas.getContext("2d"); const cols = 10; const rows = 20; const size = 14.5;
@@ -28,11 +28,10 @@ function Handheld({ tone }) {
     startNode.addEventListener("click", start); root.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => action(button.dataset.action))); document.addEventListener("keydown", keydown); reset();
     return () => { clearInterval(timer); startNode.removeEventListener("click", start); document.removeEventListener("keydown", keydown); };
   }, []);
-  return <section ref={ref} className={`global-handheld global-handheld-${tone}`} aria-label="掌机错误页面"><div className="global-handheld-brand"><span>助安社区</span><span>SECHELPER COMMUNITY</span></div><div className="global-handheld-screen-wrap"><canvas width="300" height="290" aria-label="俄罗斯方块游戏画面" /><div className="global-handheld-data"><div><span>分数 SCORE</span><strong data-score>000000</strong></div><div><span>等级 LEVEL</span><strong>01</strong></div><div><span>行数 LINES</span><strong data-lines>00</strong></div></div></div><div className="global-handheld-score"><span>SCORE <b data-score>000000</b></span><span>LEVEL 01</span></div><div className="global-handheld-controls"><div className="global-dpad"><button data-action="up" aria-label="旋转">▲</button><button data-action="left" aria-label="左移">◀</button><button data-action="down" aria-label="下移">▼</button><button data-action="right" aria-label="右移">▶</button></div><div className="global-actions"><button data-action="rotate" aria-label="旋转方块">A</button><button data-action="drop" aria-label="快速下落">B</button><button data-action="rotate" aria-label="旋转方块">X</button><button data-action="drop" aria-label="快速下落">Y</button></div></div><div className="global-system-buttons"><button type="button" aria-label="选择">选择</button><button data-start className="global-start" type="button">开始</button></div></section>;
+  return <section ref={ref} className={`global-handheld global-handheld-${tone}`} aria-label="掌机错误页面"><div className="global-handheld-brand"><span>{brandName || "…"}</span></div><div className="global-handheld-screen-wrap"><canvas width="300" height="290" aria-label="俄罗斯方块游戏画面" /><div className="global-handheld-data"><div><span>分数 SCORE</span><strong data-score>000000</strong></div><div><span>等级 LEVEL</span><strong>01</strong></div><div><span>行数 LINES</span><strong data-lines>00</strong></div></div></div><div className="global-handheld-score"><span>SCORE <b data-score>000000</b></span><span>LEVEL 01</span></div><div className="global-handheld-controls"><div className="global-dpad"><button data-action="up" aria-label="旋转">▲</button><button data-action="left" aria-label="左移">◀</button><button data-action="down" aria-label="下移">▼</button><button data-action="right" aria-label="右移">▶</button></div><div className="global-actions"><button data-action="rotate" aria-label="旋转方块">A</button><button data-action="drop" aria-label="快速下落">B</button><button data-action="rotate" aria-label="旋转方块">X</button><button data-action="drop" aria-label="快速下落">Y</button></div></div><div className="global-system-buttons"><button type="button" aria-label="选择">选择</button><button data-start className="global-start" type="button">开始</button></div></section>;
 }
 
-export function GlobalErrorPage({ code = 404, title, description, action, onAction }) {
+export function GlobalErrorPage({ code = 404, title, description, action, onAction, brandName }) {
   const [defaultTitle, defaultDescription, tone] = defaults[code] || defaults[404];
-  return <main className={`global-error-page global-error-${tone}`} aria-labelledby={`global-error-title-${code}`}><h1 className="global-error-number" id={`global-error-title-${code}`}>{code}</h1><p className="global-error-sr-only">{title || defaultTitle}。{description || defaultDescription}</p><Handheld tone={tone} /></main>;
+  return <main className={`global-error-page global-error-${tone}`} aria-labelledby={`global-error-title-${code}`}><h1 className="global-error-number" id={`global-error-title-${code}`}>{code}</h1><p className="global-error-sr-only">{title || defaultTitle}。{description || defaultDescription}</p><Handheld tone={tone} brandName={brandName} /></main>;
 }
-

@@ -19,5 +19,5 @@ func (m *Module) RegisterRoutes(v1 *gin.RouterGroup, auth gin.HandlerFunc) {
 	v1.GET("/version", m.Handler.Version)
 	v1.GET("/runtime-config", m.Handler.RuntimeConfig)
 	v1.GET("/admin/dashboard/overview", auth, m.Handler.Overview)
-	v1.GET("/admin/dashboard/resources", auth, m.Handler.Resources)
+	v1.GET("/admin/dashboard/resources/ws", auth, m.Handler.ResourceStream)
 }

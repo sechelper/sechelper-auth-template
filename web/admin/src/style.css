@@ -555,6 +555,7 @@ tbody tr:hover { background: rgba(105,108,255,.035); }
 .configuration-search input::placeholder { color: var(--sneat-muted); }
 .configuration-toolbar select { min-height: 2rem; padding: .35rem .55rem; border: 1px solid var(--sneat-border); border-radius: .3rem; color: var(--sneat-body); background: var(--sneat-paper); font-size: .74rem; }
 .configuration-result-count { color: var(--sneat-muted); font-size: .7rem; white-space: nowrap; }
+.configuration-readonly { color: var(--sneat-muted); font-size: .72rem; white-space: nowrap; }
 .configuration-table th, .configuration-table td { padding: .85rem .9rem; }
 .configuration-table th:first-child, .configuration-table td:first-child { padding-left: .35rem; }
 .configuration-table th:last-child, .configuration-table td:last-child { padding-right: .35rem; text-align: right; }

@@ -35,4 +35,4 @@
 
 顶部导航覆盖为参考页的 `62px` Frest 顶栏规格：与侧栏同色背景、左侧搜索入口、右侧语言/主题/快捷入口/通知图标和用户头像状态点；用户头像菜单承载刷新会话与退出操作，避免为复刻视觉而移除现有会话能力。
 
-左上角品牌锁定由 `web/admin/src/platform/brand/CommunityBrand.jsx` 提供，使用 `web/admin/public/assets/logo/logo.png` 中的 system-design 原始助安社区 Logo，显示服务端 `/v1/runtime-config` 返回的系统名和 `SECHELPER COMMUNITY` 两行文字，并链接回应用入口。
+左上角品牌锁定由 `web/admin/src/platform/brand/CommunityBrand.jsx` 提供，使用 `web/admin/public/assets/logo/logo.png` 中的 system-design 原始助安社区 Logo，仅显示“助安社区”和 `SECHELPER COMMUNITY` 品牌行，并链接回应用入口。应用名称不拼接到品牌锁定中；页面标题和系统信息统一读取服务端配置中心的 `APP_NAME`。

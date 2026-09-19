@@ -385,7 +385,7 @@ func rateLimitAuth(limiter ratelimit.Limiter, cfg config.RateLimitConfig, servic
 }
 
 func registerFrameworkPermissions(m *manifest.Module) error {
-	if err := m.Register(domain.Permission{Code: "admin:access", Name: "进入管理端", Description: "访问本应用后台管理能力和平台概览接口", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/authorization/me"}, {Method: "GET", Path: "/v1/admin/dashboard/overview"}, {Method: "GET", Path: "/v1/admin/dashboard/resources"}, {Method: "GET", Path: "/v1/admin/deployment/guide"}, {Method: "GET", Path: "/v1/admin/resources"}, {Method: "POST", Path: "/v1/admin/access-decisions/check"}, {Method: "GET", Path: "/v1/admin/operations/overview"}}}); err != nil {
+	if err := m.Register(domain.Permission{Code: "admin:access", Name: "进入管理端", Description: "访问本应用后台管理能力和平台概览接口", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/authorization/me"}, {Method: "GET", Path: "/v1/admin/dashboard/overview"}, {Method: "GET", Path: "/v1/admin/dashboard/resources/ws"}, {Method: "GET", Path: "/v1/admin/deployment/guide"}, {Method: "GET", Path: "/v1/admin/resources"}, {Method: "POST", Path: "/v1/admin/access-decisions/check"}, {Method: "GET", Path: "/v1/admin/operations/overview"}}}); err != nil {
 		return err
 	}
 	if err := m.Register(domain.Permission{Code: "auth:session", Name: "查看当前会话", Description: "读取当前登录会话和账号上下文", RiskLevel: "normal", APIs: []domain.API{{Method: "GET", Path: "/v1/auth/session"}, {Method: "GET", Path: "/v1/admin/account"}}}); err != nil {
@@ -400,7 +400,7 @@ func registerFrameworkPermissions(m *manifest.Module) error {
 	if err := m.Register(domain.Permission{Code: "configuration:read", Name: "查看配置中心", Description: "查看配置中心中的环境变量元数据", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/admin/configuration"}, {Method: "GET", Path: "/v1/admin/configuration/{key}"}}}); err != nil {
 		return err
 	}
-	if err := m.Register(domain.Permission{Code: "configuration:write", Name: "修改配置中心", Description: "新增、替换或删除配置中心值", RiskLevel: "critical", APIs: []domain.API{{Method: "PUT", Path: "/v1/admin/configuration/{key}"}, {Method: "DELETE", Path: "/v1/admin/configuration/{key}"}}}); err != nil {
+	if err := m.Register(domain.Permission{Code: "configuration:write", Name: "修改配置中心", Description: "新增、替换或删除配置中心值并重启框架服务", RiskLevel: "critical", APIs: []domain.API{{Method: "PUT", Path: "/v1/admin/configuration/{key}"}, {Method: "DELETE", Path: "/v1/admin/configuration/{key}"}, {Method: "POST", Path: "/v1/admin/configuration/restart"}}}); err != nil {
 		return err
 	}
 	if err := m.Register(domain.Permission{Code: "deployment:read", Name: "查看框架检查", Description: "查看框架运行检查和配置中心接入状态", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/admin/deployment/guide"}}}); err != nil {

@@ -12,8 +12,21 @@ import (
 
 var keyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,127}$`)
 var ErrNotFound = errors.New("configuration entry not found")
+var ErrFrameworkVariable = errors.New("framework configuration variables are read-only")
 
 const InstallationMarker = "FRAMEWORK_INSTALLATION_COMPLETE"
+
+var frameworkKeys = map[string]struct{}{
+	"DATABASE_URL": {}, "CONFIG_CENTER_ENCRYPTION_KEY": {}, "CONFIG_CENTER_INSTALL_KEY": {},
+	"APP_NAME": {}, "APP_ENV": {}, "LISTEN_ADDR": {}, "PUBLIC_WEB_ORIGIN": {}, "API_ORIGIN": {}, "PRIMARY_DOMAIN": {}, "TEST_DOMAIN_SUFFIX": {},
+	"SERVER_READ_TIMEOUT": {}, "SERVER_WRITE_TIMEOUT": {}, "SERVER_IDLE_TIMEOUT": {}, "SERVER_SHUTDOWN_TIMEOUT": {},
+	"IDENTITY_ISSUER": {}, "IDENTITY_AUTHORIZATION_ENDPOINT": {}, "IDENTITY_TOKEN_ENDPOINT": {}, "IDENTITY_USERINFO_ENDPOINT": {}, "IDENTITY_JWKS_URL": {}, "IDENTITY_REVOCATION_ENDPOINT": {}, "IDENTITY_END_SESSION_ENDPOINT": {}, "IDENTITY_AUDIENCE": {}, "IDENTITY_CLIENT_ID": {}, "IDENTITY_CLIENT_SECRET": {}, "IDENTITY_REDIRECT_URI": {}, "IDENTITY_APPLICATION_CODE": {}, "IDENTITY_SCOPES": {},
+	"MANIFEST_SYNC_INTERVAL": {}, "SESSION_COOKIE_NAME": {}, "SESSION_TTL": {}, "SESSION_SECURE": {}, "SESSION_SAME_SITE": {}, "SESSION_ENCRYPTION_KEY": {},
+	"ALLOWED_ORIGINS": {}, "TRUSTED_PROXY_CIDRS": {}, "METRICS_TOKEN": {},
+	"LOG_MODE": {}, "LOG_ENCODING": {}, "LOG_LEVEL": {}, "LOG_OUTPUT": {}, "LOG_TIME_KEY": {}, "LOG_LEVEL_KEY": {}, "LOG_MESSAGE_KEY": {}, "LOG_CALLER_KEY": {}, "LOG_STACKTRACE_KEY": {}, "LOG_TIME_ENCODING": {}, "LOG_LEVEL_ENCODING": {}, "LOG_DEVELOPMENT": {}, "LOG_DISABLE_CALLER": {}, "LOG_DISABLE_STACKTRACE": {}, "LOG_SAMPLING": {}, "LOG_RETENTION_DAYS": {}, "LOG_MAX_SIZE_MB": {}, "LOG_MAX_BACKUPS": {}, "LOG_MAX_AGE_DAYS": {}, "LOG_COMPRESS": {}, "DEBUG": {},
+	"RATE_LIMIT_LOGIN_PER_MINUTE": {}, "RATE_LIMIT_CALLBACK_PER_MINUTE": {}, "RATE_LIMIT_REFRESH_PER_MINUTE": {},
+	InstallationMarker: {},
+}
 
 var requiredInstallKeys = []string{
 	"APP_ENV", "APP_NAME", "SERVER_READ_TIMEOUT", "SERVER_WRITE_TIMEOUT", "SERVER_IDLE_TIMEOUT", "SERVER_SHUTDOWN_TIMEOUT", "PUBLIC_WEB_ORIGIN", "API_ORIGIN", "PRIMARY_DOMAIN", "TEST_DOMAIN_SUFFIX",
@@ -52,7 +65,16 @@ func (s *Service) GetValue(ctx context.Context, key string) (string, bool) {
 	}
 	return value.Value, true
 }
-func (s *Service) List(ctx context.Context) ([]domain.Entry, error) { return s.repository.List(ctx) }
+func (s *Service) List(ctx context.Context) ([]domain.Entry, error) {
+	entries, err := s.repository.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for index := range entries {
+		entries[index].IsFramework = IsFrameworkKey(entries[index].Key)
+	}
+	return entries, nil
+}
 func (s *Service) Resolve(ctx context.Context) (map[string]string, error) {
 	stored, err := s.repository.Values(ctx)
 	if err != nil {
@@ -73,13 +95,23 @@ func (s *Service) Get(ctx context.Context, key string) (domain.Value, error) {
 	if err != nil {
 		return domain.Value{}, err
 	}
+	value.IsFramework = IsFrameworkKey(value.Key)
 	value.Value, err = s.protector.Decrypt(value.Value)
 	return value, err
 }
 func (s *Service) Upsert(ctx context.Context, key, description string, secret bool, value, actor string) (domain.Entry, error) {
+	return s.upsert(ctx, key, description, secret, value, actor, true)
+}
+func (s *Service) UpsertBusiness(ctx context.Context, key, description string, secret bool, value, actor string) (domain.Entry, error) {
+	return s.upsert(ctx, key, description, secret, value, actor, false)
+}
+func (s *Service) upsert(ctx context.Context, key, description string, secret bool, value, actor string, allowFramework bool) (domain.Entry, error) {
 	key = strings.TrimSpace(key)
 	if !keyPattern.MatchString(key) {
 		return domain.Entry{}, errors.New("key must be an uppercase environment variable name")
+	}
+	if !allowFramework && IsFrameworkKey(key) {
+		return domain.Entry{}, ErrFrameworkVariable
 	}
 	if strings.TrimSpace(value) == "" {
 		return domain.Entry{}, errors.New("value is required")
@@ -88,13 +120,31 @@ func (s *Service) Upsert(ctx context.Context, key, description string, secret bo
 	if err != nil {
 		return domain.Entry{}, err
 	}
-	return s.repository.Upsert(ctx, key, strings.TrimSpace(description), secret, encrypted, actor)
+	entry, err := s.repository.Upsert(ctx, key, strings.TrimSpace(description), secret, encrypted, actor)
+	entry.IsFramework = IsFrameworkKey(entry.Key)
+	return entry, err
 }
 func (s *Service) Delete(ctx context.Context, key string) error {
-	if !keyPattern.MatchString(strings.TrimSpace(key)) {
+	key = strings.TrimSpace(key)
+	if !keyPattern.MatchString(key) {
 		return errors.New("invalid key")
 	}
-	return s.repository.Delete(ctx, strings.TrimSpace(key))
+	return s.repository.Delete(ctx, key)
+}
+func (s *Service) DeleteBusiness(ctx context.Context, key string) error {
+	key = strings.TrimSpace(key)
+	if !keyPattern.MatchString(key) {
+		return errors.New("invalid key")
+	}
+	if IsFrameworkKey(key) {
+		return ErrFrameworkVariable
+	}
+	return s.repository.Delete(ctx, key)
+}
+
+func IsFrameworkKey(key string) bool {
+	_, ok := frameworkKeys[strings.TrimSpace(key)]
+	return ok
 }
 
 func (s *Service) IsInstalled(ctx context.Context) (bool, error) {

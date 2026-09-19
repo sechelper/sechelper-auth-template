@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import "./profile-example.css";
 
 export function ProfileExamplePage({ auth }) {
-  const { state, login, logout, refreshSession, refresh, userCenterURL } = auth;
+  const { state, login, logout, refreshSession, refresh, userCenterURL, appName } = auth;
   const [pending, setPending] = useState("");
   const [actionError, setActionError] = useState("");
   const settingsURL = userCenterURL();
 
   useEffect(() => {
-    document.title = "SECHELPER COMMUNITY · OIDC Profile 示例";
+    document.title = appName || "";
   }, []);
 
   async function runAction(name, action) {
@@ -26,7 +26,7 @@ export function ProfileExamplePage({ auth }) {
   return (
     <main className="profile-example">
       <header className="profile-example__header">
-        <a className="profile-example__brand" href="/" aria-label="SECHELPER COMMUNITY 示例首页">SECHELPER COMMUNITY · 示例</a>
+        <a className="profile-example__brand" href="/" aria-label={appName}>{appName || "…"}</a>
         <nav className="profile-example__entry-nav" aria-label="用户相关入口">
           <a href="/">应用首页</a>
           <a href="/admin/">管理后台 <span aria-hidden="true">↗</span></a>

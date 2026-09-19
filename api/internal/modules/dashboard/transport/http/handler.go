@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/net/websocket"
 	authzhttp "sechelper-auth-template/api/internal/modules/authorization/transport/http"
 	"sechelper-auth-template/api/internal/modules/dashboard/application"
 	"sechelper-auth-template/api/internal/platform/httpkit"
@@ -51,14 +52,31 @@ func (h *Handler) Overview(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": overviewResponseData(value)})
 }
 
-func (h *Handler) Resources(c *gin.Context) {
-	value, ok := h.service.ResourceSnapshot()
-	if !ok {
-		httpkit.WriteError(c, http.StatusServiceUnavailable, httpkit.Error{Code: "RESOURCE_SNAPSHOT_UNAVAILABLE"})
-		return
-	}
-	c.Header("Cache-Control", "no-store")
-	httpkit.WriteData(c, http.StatusOK, value)
+func (h *Handler) ResourceStream(c *gin.Context) {
+	stream := websocket.Handler(func(conn *websocket.Conn) {
+		defer conn.Close()
+		ticker := time.NewTicker(application.DefaultResourceSampleInterval)
+		defer ticker.Stop()
+
+		var lastSampledAt time.Time
+		for {
+			value, ok := h.service.ResourceSnapshot()
+			if ok && value.SampledAt.After(lastSampledAt) {
+				if err := conn.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
+					return
+				}
+				if err := websocket.JSON.Send(conn, struct {
+					Data application.ResourceMetrics `json:"data"`
+				}{Data: value}); err != nil {
+					return
+				}
+				lastSampledAt = value.SampledAt
+			}
+
+			<-ticker.C
+		}
+	})
+	stream.ServeHTTP(c.Writer, c.Request)
 }
 
 func overviewResponseData(value application.Overview) gin.H {

@@ -2,12 +2,13 @@ package http
 
 import (
 	"encoding/json"
-	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/net/websocket"
 	"sechelper-auth-template/api/internal/modules/dashboard/application"
 )
 
@@ -80,51 +81,33 @@ func TestOverviewResponseDataOmitsResourcesBeforeFirstSample(t *testing.T) {
 	}
 }
 
-func TestResourceHandlerReturnsLatestSnapshotWithoutCaching(t *testing.T) {
+func TestResourceStreamPushesLatestSnapshot(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cpu := 18.5
 	snapshot := application.ResourceMetrics{SampledAt: time.Date(2026, time.September, 24, 10, 10, 1, 0, time.UTC), CPUPercent: &cpu, Goroutines: 23}
 	service := application.NewService(nil, application.AppInfo{}, nil, nil, fixedResourceSnapshotReader{value: snapshot, ready: true})
-	router := gin.New()
-	router.GET("/resources", NewHandler(service).Resources)
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/resources", nil))
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
-	}
-	if response.Header().Get("Cache-Control") != "no-store" {
-		t.Fatalf("Cache-Control = %q, want no-store", response.Header().Get("Cache-Control"))
-	}
-	var decoded struct {
-		Data application.ResourceMetrics `json:"data"`
-	}
-	if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
+	server := httptest.NewServer(ginEngineForHandler(NewHandler(service)))
+	defer server.Close()
+
+	ws, err := websocket.Dial(strings.Replace(server.URL, "http://", "ws://", 1)+"/resources/ws", "", "http://example.test")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Data.SampledAt != snapshot.SampledAt || decoded.Data.CPUPercent == nil || *decoded.Data.CPUPercent != cpu || decoded.Data.Goroutines != 23 {
-		t.Fatalf("unexpected resource response: %+v", decoded.Data)
+	defer ws.Close()
+
+	var message struct {
+		Data application.ResourceMetrics `json:"data"`
+	}
+	if err := websocket.JSON.Receive(ws, &message); err != nil {
+		t.Fatal(err)
+	}
+	if !message.Data.SampledAt.Equal(snapshot.SampledAt) || message.Data.CPUPercent == nil || *message.Data.CPUPercent != cpu || message.Data.Goroutines != 23 {
+		t.Fatalf("unexpected resource message: %+v", message.Data)
 	}
 }
 
-func TestResourceHandlerReturnsUnavailableUntilFirstSnapshot(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	service := application.NewService(nil, application.AppInfo{}, nil, nil)
+func ginEngineForHandler(handler *Handler) *gin.Engine {
 	router := gin.New()
-	router.GET("/resources", NewHandler(service).Resources)
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/resources", nil))
-	if response.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusServiceUnavailable, response.Body.String())
-	}
-	var decoded struct {
-		Error struct {
-			Code string `json:"code"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
-		t.Fatal(err)
-	}
-	if decoded.Error.Code != "RESOURCE_SNAPSHOT_UNAVAILABLE" {
-		t.Fatalf("error code = %q, want RESOURCE_SNAPSHOT_UNAVAILABLE", decoded.Error.Code)
-	}
+	router.GET("/resources/ws", handler.ResourceStream)
+	return router
 }

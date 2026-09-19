@@ -3,6 +3,7 @@ import { dashboardApi } from "./api.js";
 import { ErrorState, Loading, PageHeader } from "../../app/components.jsx";
 import { request } from "../auth/api.js";
 import { DeploymentStatusPanels } from "../deployment/DeploymentStatusPanels.jsx";
+import { apiOrigin } from "../../platform/config/runtime.js";
 
 const dependencyLabels = { api: "API 服务", postgres: "PostgreSQL", redis: "Redis", manifest: "权限 Manifest" };
 const statusLabels = { healthy: "正常", degraded: "降级", unavailable: "不可用", not_configured: "未配置", not_synced: "未同步", consistent: "一致", applied: "已应用" };
@@ -46,7 +47,7 @@ const formatBytes = (value) => {
   }
   return `${amount.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
 };
-const resourceRefreshIntervalMs = 500;
+const resourceReconnectDelayMs = 1000;
 const resourceHistoryLimit = 60;
 const emptyResourceHistory = () => ({ sampledAt: null, cpu: [], memory: [] });
 const resourceSeries = [
@@ -172,26 +173,36 @@ export function DashboardPage({ session }) {
   useEffect(() => {
     if (!data) return undefined;
     let active = true;
-    let timer;
-    const refreshResources = async () => {
-      const startedAt = Date.now();
-      try {
-        const value = await request("/v1/admin/dashboard/resources");
-        if (active) {
-          setResourceData(value.data);
-          setResourceHistory((current) => appendResourceSnapshot(current, value.data));
-          setResourceError(false);
+    let reconnectTimer;
+    let socket;
+    const connect = () => {
+      if (!active) return;
+      const origin = apiOrigin() || window.location.origin;
+      const protocol = origin.startsWith("https:") ? "wss:" : "ws:";
+      const wsOrigin = origin.replace(/^https?:/, protocol);
+      socket = new WebSocket(`${wsOrigin}/v1/admin/dashboard/resources/ws`);
+      socket.onopen = () => { if (active) setResourceError(false); };
+      socket.onmessage = (event) => {
+        if (!active) return;
+        try {
+          const value = JSON.parse(event.data)?.data;
+          if (!value) return;
+          setResourceData(value);
+          setResourceHistory((current) => appendResourceSnapshot(current, value));
+        } catch {
+          setResourceError(true);
         }
-      } catch {
-        if (active) setResourceError(true);
-      } finally {
-        if (active) timer = window.setTimeout(refreshResources, Math.max(0, resourceRefreshIntervalMs - (Date.now() - startedAt)));
-      }
+      };
+      socket.onerror = () => { if (active) setResourceError(true); };
+      socket.onclose = () => {
+        if (active) reconnectTimer = window.setTimeout(connect, resourceReconnectDelayMs);
+      };
     };
-    void refreshResources();
+    connect();
     return () => {
       active = false;
-      window.clearTimeout(timer);
+      window.clearTimeout(reconnectTimer);
+      socket?.close();
     };
   }, [data]);
 

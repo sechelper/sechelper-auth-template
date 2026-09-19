@@ -11,12 +11,13 @@ import { DeploymentGuidePage } from "../modules/deployment/DeploymentGuidePage.j
 import { GlobalErrorPage } from "../../../shared/error-pages/GlobalErrorPage.jsx";
 import { adminBusinessRoutes, adminBusinessNavigation, validateAdminBusinessModules } from "./admin-business-modules.js";
 import { filterMenuByPermission, validateBusinessMenuSections } from "./menu-model.js";
+import { appName } from "../platform/config/runtime.js";
 
 validateAdminBusinessModules();
 const businessNavigation = adminBusinessNavigation();
 validateBusinessMenuSections(businessNavigation);
 
-function ErrorPage({ code, title, description, action = "返回管理概览", onAction = () => navigate("/admin") }) { return <GlobalErrorPage code={code} title={title} description={description} action={action} onAction={onAction} />; }
+function ErrorPage({ code, title, description, action = "返回管理概览", onAction = () => navigate("/admin") }) { return <GlobalErrorPage code={code} title={title} description={description} action={action} onAction={onAction} brandName={appName()} />; }
 function ForbiddenPage() { return <ErrorPage code="403" title="暂无访问权限" description="当前账号没有访问这个管理页面所需的权限。如需开通，请联系系统管理员。" />; }
 function NotFoundPage() { return <ErrorPage code="404" title="页面不存在" description="你访问的管理页面可能已被移动、删除，或地址输入有误。" />; }
 function ServerErrorPage({ retry }) { return <ErrorPage code="500" title="服务暂时不可用" description="管理端遇到了一点问题，请稍后重试。如果问题持续存在，请联系系统管理员。" action="重新加载" onAction={retry || (() => window.location.reload())} />; }
@@ -50,6 +51,7 @@ function Page({ pathname, session, hasPermission }) {
 export function AdminApp() {
   const { state, hasPermission, login, logout, refreshSession, userCenterURL } = useAuth();
   const [pathname, setPathname] = useState(() => initialAdminPath());
+  useEffect(() => { if (appName()) document.title = appName(); }, [state.status]);
   useEffect(() => { const handler = () => setPathname(normalizePathname()); window.addEventListener("popstate", handler); return () => window.removeEventListener("popstate", handler); }, []);
   useEffect(() => { if (state.status === "unauthenticated") login(); }, [state.status, login]);
   if (state.status === "loading") return <Loading text="正在验证管理员会话…" />;

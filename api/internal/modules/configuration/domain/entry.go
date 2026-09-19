@@ -6,6 +6,7 @@ type Entry struct {
 	Key         string    `json:"key"`
 	Description string    `json:"description,omitempty"`
 	IsSecret    bool      `json:"isSecret"`
+	IsFramework bool      `json:"isFramework"`
 	Version     int64     `json:"version"`
 	UpdatedBy   string    `json:"updatedBy,omitempty"`
 	UpdatedAt   time.Time `json:"updatedAt"`

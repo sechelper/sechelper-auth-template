@@ -59,4 +59,4 @@ platform identity client -> authentication application
 
 后台布局与视觉样式由 `web/admin/src/style.css` 维护，组件遵循项目现有的布局、样式令牌和无障碍规范；不引入第二套 Bootstrap CSS 运行时依赖。
 
-管理端左上角使用 `web/admin/src/platform/brand/CommunityBrand.jsx` 的社区品牌锁定：图标资源位于 `web/admin/public/assets/logo/logo.svg`，下方显示 `SECHELPER COMMUNITY`。业务系统名由服务端配置中心解析后通过 `/v1/runtime-config` 注入；完整锁定名称提供一个返回应用入口的可访问链接。
+管理端左上角使用 `web/admin/src/platform/brand/CommunityBrand.jsx` 的社区品牌锁定：图标资源位于 `web/admin/public/assets/logo/logo.svg`，品牌锁定仅显示“助安社区”和 `SECHELPER COMMUNITY`。应用名称由服务端配置中心的 `APP_NAME` 统一提供，并通过 `/v1/runtime-config` 注入页面标题、首页和系统信息，不拼接到品牌锁定中。

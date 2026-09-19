@@ -271,24 +271,20 @@ paths:
                 $ref: '#/components/schemas/DashboardOverviewResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-  /v1/admin/dashboard/resources:
+  /v1/admin/dashboard/resources/ws:
     get:
-      operationId: getDashboardResources
-      summary: Read the latest server resource sample
-      description: Returns only the latest server resource snapshot for high-frequency dashboard charts. It does not probe dependencies or query business data.
+      operationId: streamDashboardResources
+      summary: Upgrade to the dashboard resource WebSocket stream
+      description: "Performs a WebSocket upgrade. After the 101 response, the server pushes {data: ServerResourceSnapshot} messages at the 500 ms resource sampling cadence. This is a WebSocket protocol endpoint, not a JSON HTTP read endpoint; production clients must use wss://."
+      x-websocket: true
       security:
         - sessionCookie: []
       x-required-permission: admin:access
       responses:
-        '200':
-          description: Latest server resource sample
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ServerResourceSnapshotResponse'
+        '101':
+          description: Switching Protocols to the resource stream
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /v1/admin/account:
     get:
       operationId: getAdminAccount
@@ -453,6 +449,71 @@ paths:
         '204': { description: Deleted }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/admin/configuration/restart:
+    post:
+      operationId: restartConfigurationService
+      summary: Restart the service after framework configuration changes
+      description: Writes must be completed before this endpoint is called. The service returns before sending SIGTERM so the process supervisor can start a new process with the saved framework configuration.
+      security: [{ sessionCookie: [] }]
+      x-required-permission: configuration:write
+      responses:
+        '200':
+          description: Restart has been scheduled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: object
+                    required: [restarting]
+                    properties:
+                      restarting: { type: boolean, example: true }
+                  meta:
+                    type: object
+                    required: [restartRequired]
+                    properties:
+                      restartRequired: { type: boolean, example: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/admin/business-configuration/{key}:
+    parameters:
+      - in: path
+        name: key
+        required: true
+        schema: { type: string, pattern: '^[A-Z][A-Z0-9_]{0,127}$' }
+    put:
+      operationId: upsertBusinessConfigurationEntry
+      summary: Create or replace a business configuration value
+      description: Framework variables are rejected with 403 and can only be maintained through the framework configuration endpoint.
+      security: [{ sessionCookie: [] }]
+      x-required-permission: configuration:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: { type: string, minLength: 1, writeOnly: true }
+                description: { type: string }
+                isSecret: { type: boolean, default: true }
+      responses:
+        '200': { description: Entry metadata }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      operationId: deleteBusinessConfigurationEntry
+      summary: Delete a business configuration value
+      security: [{ sessionCookie: [] }]
+      x-required-permission: configuration:write
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /v1/admin/operations/overview:
     get:
       operationId: getOperationsOverview
@@ -577,11 +638,12 @@ components:
             profile: { type: object, additionalProperties: true }
     ConfigurationEntry:
       type: object
-      required: [key, isSecret, version, updatedAt]
+      required: [key, isSecret, isFramework, version, updatedAt]
       properties:
         key: { type: string }
         description: { type: string }
         isSecret: { type: boolean }
+        isFramework: { type: boolean, description: Whether the variable is owned by the framework and read-only in business configuration. }
         version: { type: integer, format: int64 }
         updatedBy: { type: string }
         updatedAt: { type: string, format: date-time }
@@ -644,12 +706,6 @@ components:
             serverRevision: { type: integer, format: int64 }
             acceptedAt: { type: string, format: date-time }
             updatedAt: { type: string, format: date-time }
-    ServerResourceSnapshotResponse:
-      type: object
-      required: [data]
-      properties:
-        data:
-          $ref: '#/components/schemas/ServerResourceSnapshot'
     ServerResourceSnapshot:
       type: object
       description: A sampled Linux host and Go API resource snapshot. Metrics unavailable on the host are null.

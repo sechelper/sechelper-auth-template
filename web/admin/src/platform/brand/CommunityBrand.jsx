@@ -1,14 +1,11 @@
-import { adminAppConfig } from "../config/runtime.js";
-
 export function CommunityBrand({ href = "/" }) {
-  const systemName = adminAppConfig.systemName.trim();
-  const primaryName = `助安社区 - ${systemName}`;
+  const brandName = "助安社区";
 
   return (
-    <a className="sechelper-brand" href={href} aria-label={`${primaryName} · SECHELPER COMMUNITY`}>
-      <img className="sechelper-brand__logo" src="/admin/assets/logo/logo.png" alt="SECHELPER COMMUNITY" />
+    <a className="sechelper-brand" href={href} aria-label={brandName}>
+      <img className="sechelper-brand__logo" src="/admin/assets/logo/logo.png" alt={brandName} />
       <span className="sechelper-brand__copy">
-        <span className="sechelper-brand__cn" title={primaryName}>{primaryName}</span>
+        <span className="sechelper-brand__cn" title={brandName}>{brandName}</span>
         <span className="sechelper-brand__en">SECHELPER COMMUNITY</span>
       </span>
     </a>

@@ -7,8 +7,8 @@ test("admin runtime config exposes the injected API origin", () => {
   assert.equal(apiOrigin(), "https://api.example.test");
 });
 
-test("admin runtime config has a safe default system name", () => {
-  assert.equal(adminAppConfig.systemName, "模版演示");
+test("admin runtime config does not invent an application name before APP_NAME loads", () => {
+  assert.equal(adminAppConfig.systemName, "");
 });
 
 test("OIDC account URL falls back to the current origin before runtime config loads", () => {

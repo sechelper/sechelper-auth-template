@@ -8,4 +8,4 @@
 
 后台布局、颜色和组件样式由 `src/style.css` 维护；平台首页只展示认证、授权和运行状态，业务页面必须通过业务模块注册协议接入。管理端不加载第三方 Bootstrap CSS。
 
-左上角品牌锁定由 `src/platform/brand/CommunityBrand.jsx` 提供，使用 `public/assets/logo/logo.png` 中的 system-design 原始助安社区 Logo，显示“助安社区 - 模版演示”和 `SECHELPER COMMUNITY` 两行文字，并链接回应用入口。系统名来自 `globalThis.__APP_CONFIG__.systemName`，未注入时使用模板演示默认值；生产部署可通过运行时配置替换，不需要修改组件。
+左上角品牌锁定由 `src/platform/brand/CommunityBrand.jsx` 提供，使用 `public/assets/logo/logo.png` 中的 system-design 原始助安社区 Logo，仅显示“助安社区”和 `SECHELPER COMMUNITY` 两行文字，并链接回应用入口。页面标题和系统名称来自服务端 `/v1/runtime-config` 的 `systemName`，其唯一来源是配置中心 `APP_NAME`；未加载配置前不伪造应用名称。

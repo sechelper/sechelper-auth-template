@@ -16,7 +16,7 @@
 - `manifest`：当前 Manifest 版本、状态、Content Hash 和服务端修订号。
 - `resources`：总览加载时附带的最新服务器资源快照，包含 Linux 主机 CPU、内存、API 工作目录所在文件系统用量，以及当前 Go 进程 Goroutines 数。CPU 使用 `/proc/stat` 相邻采样差计算，主机内存使用 `MemTotal - MemAvailable`，磁盘空间取工作目录所在文件系统。单项不可采集时该项字段为 `null`；采集异常不会导致总览接口失败。接口不返回文件系统路径或业务数据。
 
-`GET /v1/admin/dashboard/resources` 使用相同的 Session 与 `admin:access` 权限，仅返回最新资源快照，不探测依赖或查询业务数据。服务端以 500ms 周期采样；页面同样每 500ms 请求该轻量接口，并在浏览器保留最近 60 个不同采样点（约 30 秒）绘制 CPU 与内存趋势。磁盘使用率和 Goroutines 展示最新数值，不绘制趋势线。资源接口临时失败时，页面保留最近一次成功快照与 CPU/内存曲线并自动重试；首次采样尚未就绪时显示等待状态。概览页的访问控制诊断表单调用 `POST /v1/admin/access-decisions/check`。页面不聚合业务指标。
+`GET /v1/admin/dashboard/resources/ws` 是使用相同 Session 与 `admin:access` 权限的 WebSocket 升级入口，生产环境通过 `wss://` 连接。连接建立后服务端按 500ms 采样节奏推送 `{ "data": <ServerResourceSnapshot> }`，不探测依赖或查询业务数据；页面不再轮询，也不保留原 HTTP 资源接口。页面在浏览器保留最近 60 个不同采样点（约 30 秒）绘制 CPU 与内存趋势。磁盘使用率和 Goroutines 展示最新数值，不绘制趋势线。连接临时断开时，页面保留最近一次成功快照与 CPU/内存曲线，并在 1 秒后自动重连；首次采样尚未就绪时不推送消息，页面显示等待状态。概览页的访问控制诊断表单调用 `POST /v1/admin/access-decisions/check`。页面不聚合业务指标。
 
 依赖状态包括 `healthy`、`degraded`、`unavailable`、`not_configured` 和 `not_synced`。依赖探测使用短超时，单个依赖失败不会导致 Dashboard 整体失败。具备 `admin:access` 权限的管理员还会在概览页看到部署版本信息、Bootstrap 配置、配置中心和框架检查状态；这组卡片读取 `GET /v1/admin/deployment/guide`，加载失败时不影响概览的其他内容。
 

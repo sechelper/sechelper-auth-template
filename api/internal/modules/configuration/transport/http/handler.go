@@ -3,20 +3,36 @@ package http
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"github.com/gin-gonic/gin"
 	stdhttp "net/http"
+	"os"
 	authhttp "sechelper-auth-template/api/internal/modules/authorization/transport/http"
 	"sechelper-auth-template/api/internal/modules/configuration/application"
 	"sechelper-auth-template/api/internal/platform/httpkit"
+	"syscall"
+	"time"
 )
+
+func restartProcess() {
+	timer := time.NewTimer(250 * time.Millisecond)
+	defer timer.Stop()
+	<-timer.C
+	_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
+}
 
 type Handler struct {
 	service *application.Service
 	audit   func(context.Context, string, string, string)
+	restart func()
 }
 
-func NewHandler(service *application.Service, audit func(context.Context, string, string, string)) *Handler {
-	return &Handler{service: service, audit: audit}
+func NewHandler(service *application.Service, audit func(context.Context, string, string, string), restart ...func()) *Handler {
+	restartProcess := restartProcess
+	if len(restart) > 0 && restart[0] != nil {
+		restartProcess = restart[0]
+	}
+	return &Handler{service: service, audit: audit, restart: restartProcess}
 }
 func (h *Handler) List(c *gin.Context) {
 	values, err := h.service.List(c.Request.Context())
@@ -43,6 +59,17 @@ func (h *Handler) Get(c *gin.Context) {
 	httpkit.WriteData(c, stdhttp.StatusOK, value)
 }
 func (h *Handler) Put(c *gin.Context) {
+	h.put(c, true)
+}
+
+func (h *Handler) Restart(c *gin.Context) {
+	c.JSON(stdhttp.StatusOK, gin.H{"data": gin.H{"restarting": true}, "meta": gin.H{"restartRequired": true}})
+	go h.restart()
+}
+func (h *Handler) PutBusiness(c *gin.Context) {
+	h.put(c, false)
+}
+func (h *Handler) put(c *gin.Context, allowFramework bool) {
 	var input struct {
 		Description string `json:"description"`
 		IsSecret    *bool  `json:"isSecret"`
@@ -60,8 +87,16 @@ func (h *Handler) Put(c *gin.Context) {
 	if input.IsSecret != nil {
 		secret = *input.IsSecret
 	}
-	value, err := h.service.Upsert(c.Request.Context(), c.Param("key"), input.Description, secret, input.Value, actor)
+	upsert := h.service.UpsertBusiness
+	if allowFramework {
+		upsert = h.service.Upsert
+	}
+	value, err := upsert(c.Request.Context(), c.Param("key"), input.Description, secret, input.Value, actor)
 	if err != nil {
+		if errors.Is(err, application.ErrFrameworkVariable) {
+			httpkit.WriteError(c, stdhttp.StatusForbidden, httpkit.Error{Code: "FRAMEWORK_CONFIGURATION_READ_ONLY"})
+			return
+		}
 		httpkit.WriteError(c, stdhttp.StatusBadRequest, httpkit.Error{Code: "INVALID_CONFIGURATION"})
 		return
 	}
@@ -71,11 +106,25 @@ func (h *Handler) Put(c *gin.Context) {
 	c.JSON(stdhttp.StatusOK, gin.H{"data": value, "meta": gin.H{"restartRequired": true}})
 }
 func (h *Handler) Delete(c *gin.Context) {
+	h.delete(c, true)
+}
+func (h *Handler) DeleteBusiness(c *gin.Context) {
+	h.delete(c, false)
+}
+func (h *Handler) delete(c *gin.Context, allowFramework bool) {
 	actor := "system"
 	if current, ok := authhttp.Current(c); ok {
 		actor = current.Subject
 	}
-	if err := h.service.Delete(c.Request.Context(), c.Param("key")); err != nil {
+	deleteConfiguration := h.service.DeleteBusiness
+	if allowFramework {
+		deleteConfiguration = h.service.Delete
+	}
+	if err := deleteConfiguration(c.Request.Context(), c.Param("key")); err != nil {
+		if errors.Is(err, application.ErrFrameworkVariable) {
+			httpkit.WriteError(c, stdhttp.StatusForbidden, httpkit.Error{Code: "FRAMEWORK_CONFIGURATION_READ_ONLY"})
+			return
+		}
 		httpkit.WriteError(c, stdhttp.StatusBadRequest, httpkit.Error{Code: "INVALID_CONFIGURATION"})
 		return
 	}

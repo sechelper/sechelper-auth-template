@@ -1,6 +1,6 @@
 import "./home.css";
 import { useEffect, useState } from "react";
-import { apiOrigin } from "../../config/runtime.js";
+import { apiOrigin, appName } from "../../config/runtime.js";
 
 export function HomePage({ auth }) {
   const { state, login, logout, refresh, refreshSession, userCenterURL } = auth;
@@ -18,7 +18,7 @@ export function HomePage({ auth }) {
   return (
     <main className="public-shell">
       <div className="public-header">
-        <p className="eyebrow">SECHELPER COMMUNITY</p>
+        <p className="eyebrow">{appName() || "…"}</p>
         <a
           className="admin-entry"
           href="/admin/"
@@ -35,7 +35,7 @@ export function HomePage({ auth }) {
           <span aria-hidden="true">↗</span>
         </a>
       </div>
-      <h1>统一认证业务框架</h1>
+      <h1>{appName() || "…"}</h1>
       <p className="lead">前台业务入口使用统一会话访问 Go API，后台管理端位于 /admin。</p>
       {releaseInfo && <p className="release-info" aria-label="当前部署信息">{releaseInfo.deploymentEnvironment} 环境 · {releaseInfo.releaseVersion}{releaseInfo.buildId ? ` · ${releaseInfo.buildId}` : ""}</p>}
       <section className="public-card" aria-live="polite">

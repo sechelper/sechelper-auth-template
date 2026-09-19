@@ -2,11 +2,12 @@ import { apiOrigin } from "../../platform/config/runtime.js";
 
 let csrfToken = "";
 let refreshInFlight = null;
+let authEventHandler = null;
 const loginPathKey = "auth-template.login-path";
 const silentLoginAttemptKey = "auth-template.silent-login-attempt";
 const explicitLogoutKey = "auth-template.explicit-logout";
 
-export async function request(path, options = {}) {
+async function rawRequest(path, options = {}) {
   const response = await fetch(`${apiOrigin()}${path}`, { credentials: "include", ...options, headers: { "Content-Type": "application/json", ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}), ...(options.headers || {}) } });
   csrfToken = response.headers.get("X-CSRF-Token") || csrfToken;
   const body = await response.json().catch(() => ({}));
@@ -14,11 +15,34 @@ export async function request(path, options = {}) {
   return body;
 }
 
+export async function request(path, options = {}, { retry = true } = {}) {
+  try {
+    return await rawRequest(path, options);
+  } catch (error) {
+    if (error?.status === 401 && retry && path !== "/v1/auth/refresh" && path !== "/v1/auth/logout") {
+      try {
+        await authApi.refresh();
+        return await request(path, options, { retry: false });
+      } catch (refreshError) {
+        authEventHandler?.({ type: "reauthentication_required", error: refreshError });
+        throw refreshError;
+      }
+    }
+    if (error?.status === 403 && error?.code === "CSRF_FAILED" && retry && path !== "/v1/auth/session") {
+      await rawRequest("/v1/auth/session");
+      return request(path, options, { retry: false });
+    }
+    throw error;
+  }
+}
+
+export function setAuthEventHandler(handler) { authEventHandler = handler; return () => { if (authEventHandler === handler) authEventHandler = null; }; }
+
 export const authApi = {
   session: () => request("/v1/auth/session"),
   account: () => request("/v1/account/me"),
   authorization: () => request("/v1/authorization/me"),
-  refresh: () => { if (!refreshInFlight) refreshInFlight = request("/v1/auth/refresh", { method: "POST" }).finally(() => { refreshInFlight = null; }); return refreshInFlight; },
+  refresh: () => { if (!refreshInFlight) refreshInFlight = rawRequest("/v1/auth/refresh", { method: "POST" }).finally(() => { refreshInFlight = null; }); return refreshInFlight; },
   logout: () => request("/v1/auth/logout", { method: "POST" }),
   login: ({ prompt = "login", preservePath = true } = {}) => {
     if (prompt === "login") clearExplicitLogout();

@@ -44,6 +44,7 @@ export function HomePage({ auth }) {
         {state.status === "unauthenticated" && <><p>当前未登录。</p><button onClick={login}>登录</button></>}
         {state.status === "authenticated" && <>
           <p><a href={userCenterURL()}>个人设置（统一身份中心）</a></p>
+          <p>用户：{state.displayName || state.nickname || state.email || state.subject}</p>
           <p>Subject：{state.subject}</p>
           <p>Email：{state.email || "未获取"}</p>
           <p>Application：{state.applicationCode}</p>

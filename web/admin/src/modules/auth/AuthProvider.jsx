@@ -1,11 +1,13 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { authApi, markExplicitLogout, restoreLoginPath, subscribeToAuthChanges } from "./api.js";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { authApi, markExplicitLogout, restoreLoginPath, setAuthEventHandler, subscribeToAuthChanges } from "./api.js";
 import { loadRuntimeConfig, oidcAccountURL } from "../../platform/config/runtime.js";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [state, setState] = useState({ status: "loading" });
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const refresh = async () => {
     try {
       const session = await authApi.session();
@@ -20,6 +22,9 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let cancelled = false;
+    const stopAuthEvents = setAuthEventHandler(() => {
+      if (!cancelled) setState({ status: "reauthentication_required", retryable: true });
+    });
     async function initialize() {
       try {
         await loadRuntimeConfig();
@@ -32,7 +37,19 @@ export function AuthProvider({ children }) {
     }
     initialize();
     const unsubscribe = subscribeToAuthChanges(() => { if (!cancelled) setState({ status: "unauthenticated" }); });
-    return () => { cancelled = true; unsubscribe(); };
+    const refreshTimer = setInterval(async () => {
+      const current = stateRef.current;
+      if (cancelled || current.status !== "authenticated" || !current.expiresAt) return;
+      if (Date.parse(current.expiresAt) - Date.now() > 120000) return;
+      try {
+        setState((value) => ({ ...value, status: "refreshing" }));
+        await authApi.refresh();
+        await refresh();
+      } catch (error) {
+        if (!cancelled) setState({ status: error?.status === 401 ? "reauthentication_required" : "error", retryable: true });
+      }
+    }, 30000);
+    return () => { cancelled = true; unsubscribe(); stopAuthEvents(); clearInterval(refreshTimer); };
   }, []);
 
   const value = useMemo(() => ({

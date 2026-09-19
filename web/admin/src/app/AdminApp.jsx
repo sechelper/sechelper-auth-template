@@ -56,6 +56,7 @@ export function AdminApp() {
   useEffect(() => { if (state.status === "unauthenticated") login(); }, [state.status, login]);
   if (state.status === "loading") return <Loading text="正在验证管理员会话…" />;
   if (state.status === "error") return <ServerErrorPage retry={login} />;
+  if (state.status === "reauthentication_required") return <ErrorPage code="401" title="管理员会话已过期" description="为了保护管理操作，当前会话已经失效，请重新登录后继续。" action="重新登录" onAction={login} />;
   if (state.status !== "authenticated") return null;
   if (!hasPermission("admin:access")) return <ForbiddenPage />;
   const visibleMenu = filterMenuByPermission([...menu, ...businessNavigation], hasPermission);

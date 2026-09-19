@@ -1,11 +1,13 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { authApi, clearAuthStatus, consumeInteractiveLoginAttempt, consumeSilentLoginAttempt, hasExplicitLogout, hasSilentLoginFailure, markExplicitLogout, markSilentLoginAttempt, subscribeToAuthChanges } from "./api.js";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { authApi, clearAuthStatus, consumeInteractiveLoginAttempt, consumeSilentLoginAttempt, hasExplicitLogout, hasSilentLoginFailure, markExplicitLogout, markSilentLoginAttempt, setAuthEventHandler, subscribeToAuthChanges } from "./api.js";
 import { loadRuntimeConfig, oidcAccountURL } from "../config/runtime.js";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [state, setState] = useState({ status: "loading" });
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const loadAuthenticated = async () => {
     const session = await authApi.session();
     if (!session.authenticated) return { status: "unauthenticated" };
@@ -19,6 +21,10 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (window.location.pathname.replace(/\/$/, "") === "/install") { setState({ status: "install" }); return undefined; }
     let cancelled = false;
+    const stopAuthEvents = setAuthEventHandler(() => {
+      if (hasExplicitLogout()) return;
+      setState({ status: "reauthentication_required", retryable: true });
+    });
     async function initialize() {
       try {
         await loadRuntimeConfig();
@@ -34,12 +40,44 @@ export function AuthProvider({ children }) {
         const silentAttempted = consumeSilentLoginAttempt();
         if (!hasSilentLoginFailure() && !silentAttempted) { markSilentLoginAttempt(); authApi.login({ prompt: "none" }); return; }
         clearAuthStatus(); setState({ status: "unauthenticated" });
-      } catch { if (!cancelled) setState({ status: "error", retryable: true }); }
+      } catch (error) {
+        if (cancelled) return;
+        if (error?.status === 401 && !hasSilentLoginFailure() && !hasExplicitLogout()) {
+          markSilentLoginAttempt();
+          authApi.login({ prompt: "none" });
+          return;
+        }
+        setState({ status: "error", retryable: true });
+      }
     }
     initialize();
     const unsubscribe = subscribeToAuthChanges(() => { if (!cancelled) setState({ status: "unauthenticated" }); });
-    return () => { cancelled = true; unsubscribe(); };
+    const refreshTimer = setInterval(async () => {
+      const current = stateRef.current;
+      if (cancelled || current.status !== "authenticated" || !current.expiresAt) return;
+      const remaining = Date.parse(current.expiresAt) - Date.now();
+      if (remaining > 120000) return;
+      try {
+        setState((current) => ({ ...current, status: "refreshing" }));
+        await authApi.refresh();
+        const next = await loadAuthenticated();
+        if (!cancelled) setState(next);
+      } catch (error) {
+        if (cancelled) return;
+        if (error?.status === 401 && !hasExplicitLogout()) {
+          setState({ status: "reauthentication_required", retryable: true });
+        } else setState({ status: "error", retryable: true });
+      }
+    }, 30000);
+    return () => { cancelled = true; unsubscribe(); stopAuthEvents(); clearInterval(refreshTimer); };
   }, []);
+
+  useEffect(() => {
+    if (state.status !== "reauthentication_required" || hasExplicitLogout()) return undefined;
+    markSilentLoginAttempt();
+    authApi.login({ prompt: "none" });
+    return undefined;
+  }, [state.status]);
 
   const value = useMemo(() => ({
     state,

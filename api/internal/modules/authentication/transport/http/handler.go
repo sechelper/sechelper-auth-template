@@ -135,6 +135,7 @@ func identityFields(value session.Session) gin.H {
 		"identitySubject": value.Subject,
 		"profile":         publicProfile(value),
 		"nickname":        profileNickname(value.ProfileClaims, value.Subject),
+		"displayName":     profileNickname(value.ProfileClaims, value.Subject),
 	}
 	if picture, ok := value.ProfileClaims["picture"].(string); ok && picture != "" {
 		fields["avatarUrl"] = picture

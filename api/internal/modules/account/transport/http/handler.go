@@ -59,6 +59,7 @@ func (h *Handler) CurrentUser(c *gin.Context) {
 		"applicationCode": value.ApplicationCode,
 		"profile":         profile,
 		"nickname":        accountProfileNickname(profile, value.Subject),
+		"displayName":     accountProfileNickname(profile, value.Subject),
 	}
 	if picture, ok := profile["picture"].(string); ok && picture != "" {
 		data["avatarUrl"] = picture

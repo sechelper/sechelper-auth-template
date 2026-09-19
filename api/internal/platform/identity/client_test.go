@@ -69,7 +69,7 @@ func TestAuthorizationURLRequestsProfileScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed.Query().Get("scope") != "openid email profile" {
+	if parsed.Query().Get("scope") != "openid email profile offline_access" {
 		t.Fatalf("authorization scope = %q, want profile included", parsed.Query().Get("scope"))
 	}
 	if parsed.Query().Get("prompt") != "none" {
@@ -92,7 +92,7 @@ func TestAuthorizationURLDeduplicatesConfiguredScopes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed.Query().Get("scope") != "openid profile email" {
+	if parsed.Query().Get("scope") != "openid profile email offline_access" {
 		t.Fatalf("authorization scope = %q, want each scope once", parsed.Query().Get("scope"))
 	}
 }

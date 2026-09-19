@@ -10,7 +10,7 @@
 2. 服务端生成 state、nonce、PKCE verifier，并保存短期登录事务。
 3. 服务端跳转统一认证平台。
 4. `GET /v1/auth/callback` 接收授权码并校验 state。
-5. 服务端使用 `grant_type=authorization_code` 向 Token Endpoint 兑换初始 Token；首次登录不能直接使用 Refresh Token Grant，因为此时还没有 refresh token。
+5. 服务端使用 `grant_type=authorization_code` 向 Token Endpoint 兑换初始 Token，并在授权请求中要求 `offline_access`；若身份中心没有返回 `refresh_token`，登录立即失败，不创建本地 Session。
 6. 服务端读取 UserInfo 和当前 Application 授权。
 7. 服务端创建会话并返回 HttpOnly Cookie。
 
@@ -39,6 +39,8 @@
 服务端已提供 `POST /v1/auth/public/refresh` 和 `POST /v1/auth/admin/refresh`。Refresh Token 只以 AES-GCM 密文保存在 PostgreSQL，密钥由 `SESSION_ENCRYPTION_KEY` 注入，浏览器不接触 Refresh Token。生产 PostgreSQL Store 会在事务中锁定当前 surface 的 Session 行，完成 Provider 刷新、密文替换和版本递增，跨实例不依赖进程内互斥锁。统一认证平台返回新的 Refresh Token 时，服务端替换旧密文；未返回时保留原有密文。Provider 明确返回 OAuth `invalid_grant` 时视为 Rotation Reuse，服务端在同一事务内撤销该 Session，客户端必须重新登录；网络超时和其他 Provider 错误不会静默授权。
 
 刷新请求严格使用 OAuth/OIDC `grant_type=refresh_token`，并以 Confidential Client Basic Authentication 向 Token Endpoint 认证。公共前台和管理后台共享相同的两分钟刷新提前量：Session 距离过期、浏览器页面重新获得焦点或从后台恢复可见时，都会尝试调用各自的 refresh 接口；同一页面的并发刷新请求会复用同一个进行中的请求。业务 API 收到 401 时也会先尝试一次刷新再重试原请求。刷新成功会同时续期 HttpOnly Session Cookie 和 CSRF Cookie，因此长时间打开页面时不需要重新登录；刷新失败或 refresh token 失效时才进入重新认证流程。
+
+登录阶段对 `refresh_token` 是强制要求，不接受只有 access token 的授权码交换结果。这可以避免创建无法自动续期的本地 Session；身份中心必须支持并按授权策略返回 refresh token。
 
 Refresh Rotation 的确定性回归测试位于 `api/internal/modules/authentication/application/service_test.go`。测试使用 Mock Identity Provider 固定返回两代 token，不依赖浏览器 Cookie 或等待 Session 自然过期，验证 Session 有效期更新、Refresh Token 密文轮换，以及旧 token 被拒绝。
 

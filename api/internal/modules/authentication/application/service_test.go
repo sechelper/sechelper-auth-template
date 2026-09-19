@@ -56,7 +56,7 @@ func TestBeginLoginStoresSurfaceAndReturnTo(t *testing.T) {
 	}
 }
 func (f loginIdentity) ExchangeCode(context.Context, string, string) (identity.TokenSet, error) {
-	return identity.TokenSet{AccessToken: "access"}, nil
+	return identity.TokenSet{AccessToken: "access", RefreshToken: "refresh"}, nil
 }
 func (f loginIdentity) ValidateIDToken(context.Context, string, string) (identity.IDTokenClaims, error) {
 	return identity.IDTokenClaims{RegisteredClaims: jwt.RegisteredClaims{Subject: f.subject}}, nil
@@ -84,11 +84,15 @@ func (r *fixedUserResolver) ResolveOrCreate(_ context.Context, issuer, subject s
 func TestCompleteLoginStoresResolvedPlatformUserUUID(t *testing.T) {
 	ctx := context.Background()
 	store := session.NewMemoryStore()
+	protector, err := session.NewTokenProtector("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := store.SaveLoginTransaction(ctx, session.LoginTransaction{State: "state", Nonce: "nonce", Verifier: "verifier", ExpiresAt: time.Now().Add(time.Minute)}); err != nil {
 		t.Fatal(err)
 	}
 	resolver := &fixedUserResolver{platformUserUUID: "89cf8f29-9954-470d-b3de-8a37d20c6f44"}
-	service := NewService(loginIdentity{subject: "identity-subject"}, store, store, nil, time.Hour, "app-1")
+	service := NewService(loginIdentity{subject: "identity-subject"}, store, store, protector, time.Hour, "app-1")
 	service.SetUserResolver("https://identity.example", resolver)
 
 	created, err := service.CompleteLogin(ctx, "state", "authorization-code")
@@ -112,6 +116,25 @@ func TestCompleteLoginStoresResolvedPlatformUserUUID(t *testing.T) {
 	if err != nil || current.ProfileClaims["picture"] != "https://cdn.example/avatar.png" {
 		t.Fatalf("current session profile cache = %#v, err = %v", current.ProfileClaims, err)
 	}
+}
+
+func TestCompleteLoginRejectsMissingRefreshToken(t *testing.T) {
+	ctx := context.Background()
+	store := session.NewMemoryStore()
+	if err := store.SaveLoginTransaction(ctx, session.LoginTransaction{State: "state", Nonce: "nonce", Verifier: "verifier", ExpiresAt: time.Now().Add(time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(missingRefreshTokenIdentity{loginIdentity: loginIdentity{subject: "identity-subject"}}, store, store, nil, time.Hour, "app-1")
+	service.SetUserResolver("https://identity.example", &fixedUserResolver{platformUserUUID: "89cf8f29-9954-470d-b3de-8a37d20c6f44"})
+	if _, err := service.CompleteLogin(ctx, "state", "authorization-code"); !errors.Is(err, ErrRefreshTokenMissing) {
+		t.Fatalf("CompleteLogin() error = %v, want ErrRefreshTokenMissing", err)
+	}
+}
+
+type missingRefreshTokenIdentity struct{ loginIdentity }
+
+func (f missingRefreshTokenIdentity) ExchangeCode(context.Context, string, string) (identity.TokenSet, error) {
+	return identity.TokenSet{AccessToken: "access"}, nil
 }
 
 type rotationIdentity struct {

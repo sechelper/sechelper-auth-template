@@ -124,6 +124,9 @@ func withProfileScope(scopes []string) []string {
 	if _, exists := seen["profile"]; !exists {
 		result = append(result, "profile")
 	}
+	if _, exists := seen["offline_access"]; !exists {
+		result = append(result, "offline_access")
+	}
 	return result
 }
 

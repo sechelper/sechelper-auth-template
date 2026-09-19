@@ -16,8 +16,9 @@ import (
 )
 
 var (
-	ErrInvalidState       = errors.New("invalid authentication state")
-	ErrRefreshUnavailable = errors.New("session refresh is unavailable")
+	ErrInvalidState        = errors.New("invalid authentication state")
+	ErrRefreshUnavailable  = errors.New("session refresh is unavailable")
+	ErrRefreshTokenMissing = errors.New("identity refresh token is missing")
 )
 
 type LoginState struct {
@@ -134,6 +135,9 @@ func (s *Service) CompleteLogin(ctx context.Context, state, code string) (result
 	tokens, err := s.identity.ExchangeCode(ctx, code, value.Verifier)
 	if err != nil {
 		return session.Session{}, err
+	}
+	if strings.TrimSpace(tokens.RefreshToken) == "" {
+		return session.Session{}, ErrRefreshTokenMissing
 	}
 	idToken, err := s.identity.ValidateIDToken(ctx, tokens.IDToken, value.Nonce)
 	if err != nil {

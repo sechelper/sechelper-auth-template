@@ -11,7 +11,7 @@ import { DeploymentGuidePage } from "../modules/deployment/DeploymentGuidePage.j
 import { GlobalErrorPage } from "../../../shared/error-pages/GlobalErrorPage.jsx";
 import { adminBusinessRoutes, adminBusinessNavigation, validateAdminBusinessModules } from "./admin-business-modules.js";
 import { filterMenuByPermission, validateBusinessMenuSections } from "./menu-model.js";
-import { appName } from "../platform/config/runtime.js";
+import { appName, updateDocumentTitle } from "../platform/config/runtime.js";
 
 validateAdminBusinessModules();
 const businessNavigation = adminBusinessNavigation();
@@ -51,7 +51,7 @@ function Page({ pathname, session, hasPermission }) {
 export function AdminApp() {
   const { state, hasPermission, login, logout, refreshSession, userCenterURL } = useAuth();
   const [pathname, setPathname] = useState(() => initialAdminPath());
-  useEffect(() => { if (appName()) document.title = appName(); }, [state.status]);
+  useEffect(() => { updateDocumentTitle(); }, [state.status]);
   useEffect(() => { const handler = () => setPathname(normalizePathname()); window.addEventListener("popstate", handler); return () => window.removeEventListener("popstate", handler); }, []);
   useEffect(() => { if (state.status === "unauthenticated") login(); }, [state.status, login]);
   if (state.status === "loading") return <Loading text="正在验证管理员会话…" />;

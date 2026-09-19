@@ -1,13 +1,21 @@
 let runtimeConfig = globalThis.__APP_CONFIG__ || {};
+const ADMIN_BRAND_NAME = "助安社区";
 
 export function apiOrigin() { return runtimeConfig.apiOrigin || globalThis.__APP_CONFIG__?.apiOrigin || globalThis.window?.location?.origin || ""; }
 
 export function appName() { return String(runtimeConfig.systemName || "").trim(); }
 
+export function formatAdminTitle(name) {
+  const value = String(name || "").trim();
+  return value ? `${ADMIN_BRAND_NAME} - ${value}` : ADMIN_BRAND_NAME;
+}
+
+export function adminTitle() { return formatAdminTitle(appName()); }
+
 export function updateDocumentTitle() {
-  const name = appName();
-  if (name && typeof document !== "undefined") document.title = name;
-  return name;
+  const title = adminTitle();
+  if (typeof document !== "undefined") document.title = title;
+  return title;
 }
 
 export async function loadRuntimeConfig() {

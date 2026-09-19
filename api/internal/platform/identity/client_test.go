@@ -168,3 +168,37 @@ func TestClientCredentialsTokenUsesConfiguredClient(t *testing.T) {
 		t.Fatalf("access token = %q, want service-token", tokens.AccessToken)
 	}
 }
+
+func TestRefreshTokenUsesRefreshTokenGrantAndRotatesResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/token" || r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		clientID, clientSecret, ok := r.BasicAuth()
+		if !ok || clientID != "client-1" || clientSecret != "secret-1" {
+			t.Fatalf("unexpected client authentication: %q %q %v", clientID, clientSecret, ok)
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		if got := r.Form.Get("grant_type"); got != "refresh_token" {
+			t.Fatalf("grant_type = %q, want refresh_token", got)
+		}
+		if got := r.Form.Get("refresh_token"); got != "refresh-token-1" {
+			t.Fatalf("refresh_token = %q, want refresh-token-1", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"access-token-2","refresh_token":"refresh-token-2","token_type":"Bearer","expires_in":900}`))
+	}))
+	defer server.Close()
+
+	c := NewClient(config.IdentityConfig{TokenEndpoint: server.URL + "/token", ClientID: "client-1", ClientSecret: "secret-1"}, server.Client())
+	tokens, err := c.RefreshToken(t.Context(), "refresh-token-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tokens.AccessToken != "access-token-2" || tokens.RefreshToken != "refresh-token-2" || tokens.ExpiresIn != 900 {
+		t.Fatalf("refresh response = %+v, want rotated token set", tokens)
+	}
+}

@@ -142,7 +142,8 @@ paths:
   /v1/auth/public/refresh:
     post:
       operationId: refreshSession
-      summary: Refresh the server-side Confidential Client session
+      summary: Refresh the server-side Confidential Client session with the OIDC refresh token grant
+      description: The server decrypts the refresh token held by the session, calls the configured OIDC Token Endpoint with grant_type=refresh_token, atomically stores a rotated refresh token when returned, and extends the local session. The browser never receives an access token or refresh token.
       security:
         - sessionCookie: []
       parameters:

@@ -11,8 +11,6 @@ import (
 	"sync"
 	"time"
 
-	plataudit "sechelper-auth-template/api/internal/platform/audit"
-	"sechelper-auth-template/api/internal/platform/httpkit"
 	"sechelper-auth-template/api/internal/platform/identity"
 	"sechelper-auth-template/api/internal/platform/session"
 )
@@ -56,7 +54,6 @@ type Service struct {
 	applicationCode string
 	identityIssuer  string
 	userResolver    UserResolver
-	auditRecorder   plataudit.Recorder
 	profileMu       sync.RWMutex
 	profiles        map[string]cachedProfile
 }
@@ -70,7 +67,6 @@ type LogoutResult struct {
 	EndSessionURL string
 }
 
-func (s *Service) SetAuditRecorder(recorder plataudit.Recorder) { s.auditRecorder = recorder }
 func (s *Service) SetUserResolver(issuer string, resolver UserResolver) {
 	s.identityIssuer, s.userResolver = issuer, resolver
 }
@@ -113,22 +109,6 @@ func LoginPrompt(state string) string {
 	return PromptLogin
 }
 func (s *Service) CompleteLogin(ctx context.Context, state, code string) (result session.Session, resultErr error) {
-	defer func() {
-		if s.auditRecorder == nil {
-			return
-		}
-		id, err := session.NewID()
-		if err != nil {
-			return
-		}
-		eventType := "AUTH_LOGIN_SUCCESS"
-		outcome := "success"
-		if resultErr != nil {
-			eventType = "AUTH_LOGIN_FAILED"
-			outcome = "failure"
-		}
-		_ = s.auditRecorder.Record(ctx, plataudit.Event{ID: "evt-" + id, EventType: eventType, Outcome: outcome, ActorSubject: result.Subject, ApplicationCode: s.applicationCode, ResourceType: "auth_flow", ResourceID: s.applicationCode, Action: "login", RequestID: httpkit.RequestIDFromContext(ctx), Source: "api"})
-	}()
 	value, err := s.loginStates.ConsumeLoginTransaction(ctx, state)
 	if err != nil {
 		return session.Session{}, ErrInvalidState
@@ -214,16 +194,6 @@ func profileClaims(user identity.UserInfo) map[string]any {
 	return claims
 }
 func (s *Service) Refresh(ctx context.Context, id string) (result session.Session, resultErr error) {
-	defer func() {
-		if resultErr == nil || s.auditRecorder == nil {
-			return
-		}
-		eventID, err := session.NewID()
-		if err != nil {
-			return
-		}
-		_ = s.auditRecorder.Record(ctx, plataudit.Event{ID: "evt-" + eventID, EventType: "AUTH_SESSION_REFRESH_FAILED", Outcome: "failure", ApplicationCode: s.applicationCode, ResourceType: "session", ResourceID: id, Action: "refresh", RequestID: httpkit.RequestIDFromContext(ctx), Source: "api"})
-	}()
 	if rotator, ok := s.sessions.(session.RefreshRotator); ok {
 		value, err := rotator.RotateRefreshToken(ctx, id, func(ctx context.Context, current session.Session) (session.Session, error) {
 			current.ProfileClaims = s.loadProfile(id, current.ExpiresAt)
@@ -319,19 +289,6 @@ func (s *Service) Logout(ctx context.Context, id, redirectURI, state string) (Lo
 	s.profileMu.Lock()
 	delete(s.profiles, id)
 	s.profileMu.Unlock()
-	if s.auditRecorder != nil {
-		eventID, idErr := session.NewID()
-		if idErr == nil {
-			eventType, outcome, subject := "AUTH_LOGOUT", "success", ""
-			if err != nil {
-				eventType, outcome = "AUTH_LOGOUT", "failure"
-			}
-			if current.Subject != "" {
-				subject = current.Subject
-			}
-			_ = s.auditRecorder.Record(ctx, plataudit.Event{ID: "evt-" + eventID, EventType: eventType, Outcome: outcome, ActorSubject: subject, ApplicationCode: s.applicationCode, ResourceType: "session", ResourceID: id, Action: "logout", RequestID: httpkit.RequestIDFromContext(ctx), Source: "api"})
-		}
-	}
 	return logout, err
 }
 

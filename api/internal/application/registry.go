@@ -10,6 +10,7 @@ import (
 	"sechelper-auth-template/api/internal/modules/authorization/domain"
 	manifestdomain "sechelper-auth-template/api/internal/modules/manifest/domain"
 	platformaudit "sechelper-auth-template/api/internal/platform/audit"
+	platformlogging "sechelper-auth-template/api/internal/platform/logging"
 )
 
 type PermissionRegistrar interface {
@@ -21,6 +22,7 @@ type ResourceRegistrar interface {
 }
 
 type AuditRegistrar = platformaudit.DefinitionRegistrar
+type Logger = platformlogging.Logger
 
 type RouteAuthorizer interface {
 	RequirePermission(string) gin.HandlerFunc
@@ -44,6 +46,7 @@ type BusinessModule interface {
 	RegisterRoutes(*gin.RouterGroup, RouteAuthorizer) error
 }
 type ConfigurationAware interface{ SetConfiguration(ConfigurationProvider) }
+type LoggerAware interface{ SetLogger(Logger) }
 
 type Registry struct{ modules []BusinessModule }
 
@@ -68,6 +71,14 @@ func (r *Registry) SetConfiguration(provider ConfigurationProvider) {
 	for _, module := range r.modules {
 		if aware, ok := module.(ConfigurationAware); ok {
 			aware.SetConfiguration(provider)
+		}
+	}
+}
+
+func (r *Registry) SetLogger(logger Logger) {
+	for _, module := range r.modules {
+		if aware, ok := module.(LoggerAware); ok {
+			aware.SetLogger(logger)
 		}
 	}
 }

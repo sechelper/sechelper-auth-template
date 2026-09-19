@@ -3,7 +3,7 @@ import { request } from "../auth/api.js";
 import { ErrorState, Loading, PageHeader } from "../../app/components.jsx";
 import { DataTable, EmptyState, RefreshButton } from "../../shared/ui.jsx";
 
-const eventLabels = { AUTH_LOGIN_SUCCESS: "登录成功", AUTH_LOGIN_FAILED: "登录失败", AUTH_LOGOUT: "退出登录", AUTH_SESSION_REVOKED: "会话撤销", RESOURCE_ACCESS_DENIED: "资源访问拒绝", RESOURCE_SCOPE_DENIED: "资源范围拒绝", ACCESS_DECISION_CHECKED: "访问决策诊断", MANIFEST_SYNC_SUCCEEDED: "Manifest 同步成功", MANIFEST_SYNC_FAILED: "Manifest 同步失败", MANIFEST_CHANGE_DETECTED: "Manifest 发生变化" };
+const eventLabels = { RESOURCE_ACCESS_DENIED: "资源访问拒绝", RESOURCE_SCOPE_DENIED: "资源范围拒绝", ACCESS_DECISION_CHECKED: "访问决策诊断", MANIFEST_SYNC_SUCCEEDED: "Manifest 同步成功", MANIFEST_SYNC_FAILED: "Manifest 同步失败", MANIFEST_CHANGE_DETECTED: "Manifest 发生变化" };
 
 export function AuditPage() {
   const [rows, setRows] = useState(null); const [error, setError] = useState(null); const [busy, setBusy] = useState(false); const [filters, setFilters] = useState({ eventType: "", outcome: "" });

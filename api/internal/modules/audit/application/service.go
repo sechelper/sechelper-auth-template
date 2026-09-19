@@ -30,7 +30,6 @@ type Service struct {
 
 func NewService(repository Repository) *Service {
 	return &Service{repository: repository, definitions: map[string]EventDefinition{
-		"AUTH_LOGIN_SUCCESS": {"authentication", "info"}, "AUTH_LOGIN_FAILED": {"authentication", "warning"}, "AUTH_LOGOUT": {"authentication", "info"}, "AUTH_SESSION_REFRESH_FAILED": {"authentication", "warning"}, "AUTH_SESSION_REVOKED": {"authentication", "warning"}, "AUTH_SESSION_REVOKE_FAILED": {"authentication", "warning"},
 		"RESOURCE_ACCESS_DENIED": {"authorization", "warning"}, "RESOURCE_SCOPE_DENIED": {"authorization", "warning"}, "ACCESS_DECISION_CHECKED": {"authorization", "info"},
 		"MANIFEST_SYNC_SUCCEEDED": {"manifest", "info"}, "MANIFEST_SYNC_FAILED": {"manifest", "critical"}, "MANIFEST_CHANGE_DETECTED": {"manifest", "warning"},
 		"BACKGROUND_JOB_RETRIED": {"operations", "warning"}, "BACKGROUND_JOB_CANCELLED": {"operations", "warning"}, "SECURITY_CONFIGURATION_CHANGED": {"operations", "critical"},
@@ -59,7 +58,7 @@ func (s *Service) RegisterEventType(eventType string, definition platformaudit.E
 
 func supportedCategory(value string) bool {
 	switch value {
-	case "authentication", "authorization", "resource", "manifest", "operations", "business":
+	case "authorization", "resource", "manifest", "operations", "business":
 		return true
 	default:
 		return false

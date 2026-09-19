@@ -17,7 +17,9 @@ persistence -> application ports
 platform identity client -> authentication application
 ```
 
-后端业务通过 `api/internal/application.Registry` 接入宿主，不由框架反向导入业务实现。模块向宿主注册权限、资源定义、审计事件类型和受保护路由；每个业务路由必须在模块边界声明服务端授权要求。框架提供统一的审计 Recorder 与 HTTP 错误封装，业务不自建公共错误协议或绕过审计端口。
+后端业务通过 `api/internal/application.Registry` 接入宿主，不由框架反向导入业务实现。模块向宿主注册权限、资源定义、审计事件类型和受保护路由，并可通过 `application.Logger` 接收宿主提供的本地结构化日志接口；每个业务路由必须在模块边界声明服务端授权要求。框架提供统一的审计 Recorder、日志字段约束与 HTTP 错误封装，业务不直接依赖 Zap、不读取日志配置、不自建公共错误协议或绕过审计端口。
+
+操作审计只保留框架核心安全和平台操作，包括授权拒绝/决策、Manifest、配置变更、运维命令和资源导出。登录、登出、Session 撤销与刷新不写入审计表。
 
 开发、测试、生产共享 `make build`、`make run`、配置载入包和 API/迁移程序入口；`ENV` 只选择构建配置，不创建另一套启动路径。生产 Go 构建不带 `example` build tag，订单示例代码因 build constraints 不进入编译单元；Admin 生产构建只发现 `admin-module.js`，不会把 `test-module.js` 或 `example-module.js` 纳入模块图。生产镜像还检查组件参考、订单案例路由及示例迁移是否泄漏。Go 测试文件 `_test.go` 只由测试命令编译，不属于服务二进制。
 

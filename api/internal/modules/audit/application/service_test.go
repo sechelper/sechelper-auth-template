@@ -35,6 +35,18 @@ func TestRecordRejectsUnregisteredEvent(t *testing.T) {
 	}
 }
 
+func TestAuthenticationLifecycleEventsAreNotAuditEvents(t *testing.T) {
+	service := NewService(&fakeRepository{})
+	for _, eventType := range []string{"AUTH_LOGIN_SUCCESS", "AUTH_LOGIN_FAILED", "AUTH_LOGOUT", "AUTH_SESSION_REVOKED", "AUTH_SESSION_REVOKE_FAILED", "AUTH_SESSION_REFRESH_FAILED"} {
+		if err := service.Record(context.Background(), platformaudit.Event{ID: "evt-" + eventType, EventType: eventType, ApplicationCode: "app-1"}); err == nil {
+			t.Fatalf("event %q should not be registered", eventType)
+		}
+	}
+	if err := service.RegisterEventType("AUTH_LOGIN_SUCCESS", platformaudit.EventDefinition{Category: "authentication", Severity: "info"}); err == nil {
+		t.Fatal("authentication category should not be accepted")
+	}
+}
+
 func TestBusinessModuleCanRegisterAuditEventType(t *testing.T) {
 	repository := &fakeRepository{}
 	service := NewService(repository)

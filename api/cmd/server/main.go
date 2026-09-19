@@ -168,7 +168,6 @@ func main() {
 		_ = auditModule.Service.Record(ctx, plataudit.Event{ID: "evt-" + eventID, EventType: "SECURITY_CONFIGURATION_CHANGED", Outcome: "success", ActorSubject: actor, ApplicationCode: cfg.Identity.ApplicationCode, ResourceType: "configuration", ResourceID: key, Action: action, RequestID: httpkit.RequestIDFromContext(ctx), Source: "admin_ui"})
 	})
 	installationModule := installation.New(configurationService, cfg.Bootstrap.InstallKey, cfg.Bootstrap.InstallLockFile, centerProtector)
-	authService.SetAuditRecorder(auditModule.Service)
 	authorizationModule.ResourceHandler.SetDecisionRecorder(func(ctx context.Context, actor authorizationdomain.Context, decision authorizationdomain.Decision, requestID string) {
 		result := "denied"
 		if decision.Allowed {
@@ -225,6 +224,7 @@ func main() {
 		logger.Fatal("business registration failed", zap.Error(err))
 	}
 	businessRuntime.SetConfiguration(configurationModule.Provider())
+	businessRuntime.SetLogger(logging.NewModuleLogger(logger, "business"))
 	if err := businessRuntime.RegisterPermissions(manifestModule); err != nil {
 		logger.Fatal("business permission registration failed", zap.Error(err))
 	}

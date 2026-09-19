@@ -44,7 +44,7 @@ Refresh Rotation 的确定性回归测试位于 `api/internal/modules/authentica
 
 - 更严格的 Origin/Host Policy 校验；
 - 统一登出和远端 Token 撤销；
-- 会话审计；
+- 认证生命周期使用技术日志，不写入操作审计；
 - 登录事务的多实例共享。当前登录事务仍由认证服务内存保存，生产多副本部署前需要迁移到 Redis 或 PostgreSQL。
 - Refresh Token 的跨实例乐观锁/行锁。当前已增加单进程串行保护，不能替代多实例并发控制。
 

@@ -2,10 +2,12 @@ package logging
 
 import (
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -15,6 +17,98 @@ import (
 	"go.uber.org/zap/zapcore"
 	"sechelper-auth-template/api/internal/platform/config"
 )
+
+// Field is the only structured field shape exposed to business modules.
+// Values must be scalar, an error, or a small JSON-compatible value.
+type Field struct {
+	Key   string
+	Value any
+}
+
+// Logger is the framework-owned local structured logging boundary for business modules.
+// It deliberately exposes no Zap types and never accepts secrets as field keys.
+type Logger interface {
+	Debug(context.Context, string, ...Field)
+	Info(context.Context, string, ...Field)
+	Warn(context.Context, string, ...Field)
+	Error(context.Context, string, ...Field)
+}
+
+type moduleLogger struct {
+	base   *zap.Logger
+	module string
+}
+
+var fieldKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,63}$`)
+
+var forbiddenFieldKeys = map[string]struct{}{
+	"access_token": {}, "authorization": {}, "client_secret": {}, "cookie": {},
+	"database_password": {}, "password": {}, "refresh_token": {}, "session_cookie": {},
+	"buildid": {}, "environment": {}, "logger": {}, "module": {}, "requestid": {},
+	"service": {}, "sourcerevision": {}, "version": {},
+}
+
+// NewModuleLogger binds the framework logger to a business module without exposing
+// the underlying logging implementation or allowing arbitrary logger names.
+func NewModuleLogger(base *zap.Logger, module string) Logger {
+	return &moduleLogger{base: base, module: strings.TrimSpace(module)}
+}
+
+func (l *moduleLogger) Debug(ctx context.Context, message string, fields ...Field) {
+	l.log(ctx, zap.DebugLevel, message, fields...)
+}
+
+func (l *moduleLogger) Info(ctx context.Context, message string, fields ...Field) {
+	l.log(ctx, zap.InfoLevel, message, fields...)
+}
+
+func (l *moduleLogger) Warn(ctx context.Context, message string, fields ...Field) {
+	l.log(ctx, zap.WarnLevel, message, fields...)
+}
+
+func (l *moduleLogger) Error(ctx context.Context, message string, fields ...Field) {
+	l.log(ctx, zap.ErrorLevel, message, fields...)
+}
+
+func (l *moduleLogger) log(ctx context.Context, level zapcore.Level, message string, fields ...Field) {
+	if l == nil || l.base == nil || strings.TrimSpace(message) == "" {
+		return
+	}
+	zapFields := make([]zap.Field, 0, len(fields)+2)
+	if l.module != "" {
+		zapFields = append(zapFields, zap.String("module", l.module))
+	}
+	if ctx != nil {
+		if requestID, ok := ctx.Value(requestIDContextKey{}).(string); ok && requestID != "" {
+			zapFields = append(zapFields, zap.String("requestId", requestID))
+		}
+	}
+	for _, field := range fields {
+		if validField(field) {
+			zapFields = append(zapFields, zap.Any(field.Key, field.Value))
+		}
+	}
+	if ce := l.base.Check(level, message); ce != nil {
+		ce.Write(zapFields...)
+	}
+}
+
+func validField(field Field) bool {
+	key := strings.ToLower(strings.TrimSpace(field.Key))
+	if key == "" || !fieldKeyPattern.MatchString(key) {
+		return false
+	}
+	_, forbidden := forbiddenFieldKeys[key]
+	return !forbidden
+}
+
+// WithRequestID returns a context carrying the request ID for module logs.
+// The HTTP framework uses the same boundary without requiring modules to import it.
+func WithRequestID(ctx context.Context, requestID string) context.Context {
+	return context.WithValue(ctx, requestIDContextKey{}, strings.TrimSpace(requestID))
+}
+
+type requestIDContextKey struct{}
 
 // New constructs the process logger from validated application configuration.
 // Relative file paths are resolved beside the executable, never against the process working directory.

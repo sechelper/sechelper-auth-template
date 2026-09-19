@@ -14,7 +14,7 @@
 
 ## Audit
 
-`audit_events` 只记录关键认证、会话、授权、资源、Manifest 和高风险运维操作，不记录普通 HTTP 请求、页面访问、Dashboard 加载或健康检查。事件包含事件类型、分类、严重级别、结果、原因、Subject、Application Code、资源引用和 Request ID。审计记录不得包含 Client Secret、Access Token、Refresh Token、Cookie 或数据库密码；查询接口支持按事件类型、分类、严重级别、结果、操作者、资源和时间范围筛选。
+`audit_events` 只记录授权决策、资源访问、Manifest、配置变更和高风险运维操作，不记录登录、登出、Session 撤销、Session 刷新、普通 HTTP 请求、页面访问、Dashboard 加载或健康检查。事件包含事件类型、分类、严重级别、结果、原因、Subject、Application Code、资源引用和 Request ID。审计记录不得包含 Client Secret、Access Token、Refresh Token、Cookie 或数据库密码；查询接口支持按事件类型、分类、严重级别、结果、操作者、资源和时间范围筛选。
 
 ## Operations
 

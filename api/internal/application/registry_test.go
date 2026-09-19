@@ -1,6 +1,7 @@
 package application
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -8,6 +9,7 @@ import (
 	"sechelper-auth-template/api/internal/modules/authorization/domain"
 	manifestdomain "sechelper-auth-template/api/internal/modules/manifest/domain"
 	platformaudit "sechelper-auth-template/api/internal/platform/audit"
+	platformlogging "sechelper-auth-template/api/internal/platform/logging"
 )
 
 type registryModule struct {
@@ -89,6 +91,33 @@ func TestRegistryRejectsDuplicateModuleNamesAndPropagatesRegistrationErrors(t *t
 		t.Fatal("expected resource registration error")
 	}
 }
+
+func TestRegistryInjectsLoggerIntoLoggerAwareModules(t *testing.T) {
+	module := &loggerAwareModule{registryModule: registryModule{name: "orders", steps: &[]string{}}}
+	registry := NewRegistry()
+	if err := registry.Add(module); err != nil {
+		t.Fatal(err)
+	}
+	logger := stubLogger{}
+	registry.SetLogger(logger)
+	if module.logger != Logger(logger) {
+		t.Fatal("logger was not injected into the module")
+	}
+}
+
+type loggerAwareModule struct {
+	registryModule
+	logger Logger
+}
+
+func (m *loggerAwareModule) SetLogger(logger Logger) { m.logger = logger }
+
+type stubLogger struct{}
+
+func (stubLogger) Debug(context.Context, string, ...platformlogging.Field) {}
+func (stubLogger) Info(context.Context, string, ...platformlogging.Field)  {}
+func (stubLogger) Warn(context.Context, string, ...platformlogging.Field)  {}
+func (stubLogger) Error(context.Context, string, ...platformlogging.Field) {}
 
 type permissionRegistrar struct{}
 

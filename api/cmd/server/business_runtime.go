@@ -13,6 +13,10 @@ func (runtime *businessRuntime) SetConfiguration(provider application.Configurat
 	runtime.modules.SetConfiguration(provider)
 }
 
+func (runtime *businessRuntime) SetLogger(logger application.Logger) {
+	runtime.modules.SetLogger(logger)
+}
+
 func (runtime *businessRuntime) RegisterPermissions(registry *manifest.Module) error {
 	return runtime.modules.RegisterPermissions(registry)
 }

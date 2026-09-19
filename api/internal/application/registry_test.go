@@ -77,10 +77,10 @@ func TestRegistryRegistersCapabilitiesInModuleOrder(t *testing.T) {
 func TestRegistryRejectsDuplicateModuleNamesAndPropagatesRegistrationErrors(t *testing.T) {
 	steps := []string{}
 	registry := NewRegistry()
-	if err := registry.Add(registryModule{name: "orders", steps: &steps}); err != nil {
+	if err := registry.Add(registryModule{name: "catalog", steps: &steps}); err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add(registryModule{name: "orders", steps: &steps}); err == nil {
+	if err := registry.Add(registryModule{name: "catalog", steps: &steps}); err == nil {
 		t.Fatal("expected duplicate module error")
 	}
 	failing := NewRegistry()
@@ -93,7 +93,7 @@ func TestRegistryRejectsDuplicateModuleNamesAndPropagatesRegistrationErrors(t *t
 }
 
 func TestRegistryInjectsLoggerIntoLoggerAwareModules(t *testing.T) {
-	module := &loggerAwareModule{registryModule: registryModule{name: "orders", steps: &[]string{}}}
+	module := &loggerAwareModule{registryModule: registryModule{name: "catalog", steps: &[]string{}}}
 	registry := NewRegistry()
 	if err := registry.Add(module); err != nil {
 		t.Fatal(err)

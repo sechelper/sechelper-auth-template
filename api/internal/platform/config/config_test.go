@@ -16,7 +16,7 @@ func TestLoadUsesExplicitConfigFileOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if c.App.ListenAddr != "0.0.0.0:8080" {
+	if c.App.ListenAddr != "127.0.0.1:8080" {
 		t.Fatalf("app.listenAddr = %q, want config file value", c.App.ListenAddr)
 	}
 	if c.Bootstrap.DatabaseURL == "" {

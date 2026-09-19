@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useAuth } from "../auth/AuthProvider.jsx";
 import { appName } from "../config/runtime.js";
 import { authApi, restoreLoginPath } from "../auth/api.js";
@@ -10,9 +10,6 @@ validatePublicBusinessModules();
 
 export function App() {
   const { state, login, silentLogin, logout, refresh, refreshSession, userCenterURL } = useAuth();
-  const DevelopmentProfileExamplePage = useMemo(() => (import.meta.env?.DEV || import.meta.env?.MODE === "test")
-    ? lazy(() => import("../../business/profile-example/example-module.js"))
-    : null, []);
   const pathname = window.location.pathname.replace(/\/$/, "") || "/";
   useEffect(() => { if (appName()) document.title = appName(); }, [state.status]);
   const businessRoute = publicBusinessRoutes().find((route) => route.path === pathname);
@@ -36,9 +33,6 @@ export function App() {
   if (businessRoute) {
     const BusinessPage = businessRoute.element;
     return <BusinessPage auth={{ state, login, silentLogin, logout, refresh, refreshSession, userCenterURL, appName: appName() }} />;
-  }
-  if (pathname === "/" && (import.meta.env?.DEV || import.meta.env?.MODE === "test")) {
-    return <Suspense fallback={<p role="status">正在载入开发示例…</p>}><DevelopmentProfileExamplePage auth={{ state, login, silentLogin, logout, refresh, refreshSession, userCenterURL, appName: appName() }} /></Suspense>;
   }
   return <GlobalErrorPage code={404} brandName={appName()} />;
 }

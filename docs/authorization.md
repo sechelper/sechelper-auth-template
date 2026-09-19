@@ -2,7 +2,7 @@
 
 本文档只描述运行时授权行为和 Manifest 同步语义。框架边界、维护流程、变更门槛、测试门禁和回滚规则统一维护在[授权框架维护](authorization-framework-maintenance.md)，不要在业务模块文档中复制这些规则。
 
-业务模块通过 Manifest Registry 声明 `permission_code`、风险等级和 API 绑定。权限码使用业务命名空间，例如 `order:read`。
+业务模块通过 Manifest Registry 声明 `permission_code`、风险等级和 API 绑定。权限码使用业务命名空间，例如 `resource:read`。
 
 ## 当前执行链
 

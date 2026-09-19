@@ -1,4 +1,4 @@
-.PHONY: help dev dev-down run build db-migrate test test-go test-web test-admin release-check release-id release-sync toolchain-check openapi-lint architecture-check example-orders-test
+.PHONY: help dev dev-down run build db-migrate test test-go test-web test-admin release-check release-id release-sync toolchain-check openapi-lint architecture-check
 
 ENV ?= development
 ENV_NORMALIZED := $(shell printf '%s' '$(ENV)' | tr '[:upper:]' '[:lower:]')
@@ -41,8 +41,7 @@ help:
 		'make db-migrate   Apply forward-only migrations to the configured database' \
 		'make test         Run Go and frontend tests' \
 		'make openapi-lint Validate the canonical OpenAPI contract' \
-		'make architecture-check Enforce framework/business boundaries' \
-		'make example-orders-test Run the opt-in orders example tests'
+		'make architecture-check Enforce framework/business boundaries'
 
 dev:
 	$(MAKE) --no-print-directory run ENV=development
@@ -83,13 +82,10 @@ test-web: toolchain-check
 test-admin: toolchain-check
 	cd web/admin && npm test
 
-test: test-go test-web test-admin example-orders-test
+test: test-go test-web test-admin
 
 architecture-check:
 	bash deploy/scripts/check-boundaries.sh
-
-example-orders-test: toolchain-check
-	tmp_dir=$$(mktemp -d /tmp/auth-template-example.XXXXXX); go_tmp=$$(mktemp -d /tmp/auth-template-example-go.XXXXXX); trap 'rm -rf "$$tmp_dir" "$$go_tmp"' EXIT; cd api && GOCACHE="$$tmp_dir" GOTMPDIR="$$go_tmp" go test -tags=example ./internal/business/orders/...
 
 build: release-check toolchain-check
 	@case "$(ENV_NORMALIZED)" in development|test|production) ;; *) echo 'ENV must be development, test, or production' >&2; exit 2 ;; esac
@@ -100,7 +96,7 @@ build: release-check toolchain-check
 	  build_dir="$(BUILD_OUTPUT_DIR)"; mkdir -p "$$build_dir"; \
 	  if [ "$(COMPONENT)" = all ] || [ "$(COMPONENT)" = api ]; then \
 	    mkdir -p "$$build_dir/api" "$$build_dir/go-cache" "$$build_dir/go-tmp"; \
-	    (cd api && GOCACHE="$$build_dir/go-cache" GOTMPDIR="$$build_dir/go-tmp" CGO_ENABLED=0 go build -tags=example -trimpath -ldflags="-s -w -X main.releaseVersion=$(RELEASE_VERSION) -X main.buildID=$(BUILD_ID) -X main.buildRevision=$(SOURCE_REVISION) -X main.buildEnvironment=test" -o "$$build_dir/api/auth-template" ./cmd/server); \
+	    (cd api && GOCACHE="$$build_dir/go-cache" GOTMPDIR="$$build_dir/go-tmp" CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.releaseVersion=$(RELEASE_VERSION) -X main.buildID=$(BUILD_ID) -X main.buildRevision=$(SOURCE_REVISION) -X main.buildEnvironment=test" -o "$$build_dir/api/auth-template" ./cmd/server); \
 	    (cd api && GOCACHE="$$build_dir/go-cache" GOTMPDIR="$$build_dir/go-tmp" CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.buildEnvironment=test" -o "$$build_dir/api/auth-template-migrate" ./cmd/migrate); \
 	    cp -a api/migrations "$$build_dir/api/"; \
 	  fi; \
@@ -110,8 +106,6 @@ build: release-check toolchain-check
 	    printf '{"component":"web","applicationVersion":"%s","buildId":"%s","sourceRevision":"%s","environment":"test"}\n' "$(RELEASE_VERSION)" "$(BUILD_ID)" "$(SOURCE_REVISION)" > "$$build_dir/web/build-info.json"; \
 	    (cd web/admin && NPM_CONFIG_CACHE="$$build_dir/npm-cache" npm ci --no-audit --no-fund && NPM_CONFIG_CACHE="$$build_dir/npm-cache" npm run build -- --mode test --outDir "$$build_dir/admin" --emptyOutDir); \
 	    printf '{"component":"admin","applicationVersion":"%s","buildId":"%s","sourceRevision":"%s","environment":"test"}\n' "$(RELEASE_VERSION)" "$(BUILD_ID)" "$(SOURCE_REVISION)" > "$$build_dir/admin/build-info.json"; \
-	    grep -R -F -q '/admin/component-reference' "$$build_dir/admin" || { echo 'test build is missing component reference route' >&2; exit 1; }; \
-	    grep -R -F -q '/admin/orders' "$$build_dir/admin" || { echo 'test build is missing example orders route' >&2; exit 1; }; \
 	  fi; \
 	  node deploy/scripts/write-artifact-manifest.mjs "$(ARTIFACT_MANIFEST)" test "$(COMPONENT)" "$(RELEASE_VERSION)" "$(BUILD_ID)" "$(SOURCE_REVISION)" "$$build_dir"; \
 	  printf 'test build artifacts: %s\n' "$$build_dir"; \
@@ -126,11 +120,10 @@ build: release-check toolchain-check
 	    trap 'docker rm -f "$$web_id" "$$api_id" >/dev/null 2>&1 || true; rm -rf "$$tmp_dir"' EXIT; \
 	    docker cp "$$web_id:/usr/share/nginx/html/admin" "$$tmp_dir/admin"; \
 	    docker cp "$$api_id:/app/migrations" "$$tmp_dir/migrations"; \
-	    if grep -R -E -q '/admin/(component-reference|orders)' "$$tmp_dir/admin"; then echo 'test/example route leaked into production image' >&2; exit 1; fi; \
 	    if find "$$tmp_dir/migrations/business" -name MODULE_KIND -type f -exec grep -l -x example {} + | grep -q .; then echo 'test/example migrations leaked into production image' >&2; exit 1; fi; \
 	  fi; \
 	  node deploy/scripts/write-artifact-manifest.mjs "$(ARTIFACT_MANIFEST)" "$(ENV_NORMALIZED)" "$(COMPONENT)" "$(RELEASE_VERSION)" "$(BUILD_ID)" "$(SOURCE_REVISION)"; \
 	fi
 
 openapi-lint: toolchain-check
-	npm_cache=$$(mktemp -d /tmp/auth-template-npm.XXXXXX); trap 'rm -rf "$$npm_cache"' EXIT; NPM_CONFIG_CACHE="$$npm_cache" npx --yes @redocly/cli@1.34.0 lint docs/contracts/openapi.yaml docs/contracts/business/orders/openapi.yaml
+	npm_cache=$$(mktemp -d /tmp/auth-template-npm.XXXXXX); trap 'rm -rf "$$npm_cache"' EXIT; NPM_CONFIG_CACHE="$$npm_cache" npx --yes @redocly/cli@1.34.0 lint docs/contracts/openapi.yaml

@@ -11,9 +11,9 @@
 | CSRF 与 Cookie 基线 | 部分实现 | `api/internal/modules/authentication/transport/http/handler.go` | 认证应用测试通过 | Cookie Domain/Path 与服务端生命周期尚无浏览器矩阵 | 增加 SameSite、Session Fixation、过期和重登录 E2E |
 | Migration checksum 与并发锁 | 已实现，待数据库验证 | `api/cmd/migrate/main.go`、`api/migrations/` | 无数据库运行证据 | 尚无空库/增量/失败恢复演练 | 在专用 PostgreSQL 中执行全量与并发迁移测试 |
 | Redis 授权缓存 | 部分实现 | `api/internal/modules/authorization/persistence/redis.go` | 授权应用单元测试通过 | Redis 故障 fail-closed 未完成多实例证据 | 增加 Redis 故障、失效广播和缓存击穿测试 |
-| 资源级授权与租户隔离 | 部分实现 | `api/internal/modules/authorization/`、`api/internal/business/orders/` | 授权资源单元测试通过 | Orders 当前为只读且未实现租户/所有权过滤 | 将授权下沉到订单 Use Case，补越权测试 |
+| 资源级授权与租户隔离 | 部分实现 | `api/internal/modules/authorization/`、业务模块 Use Case | 授权资源单元测试通过 | 业务模块仍需补充租户/所有权过滤证据 | 将授权下沉到业务 Use Case，补越权测试 |
 | Manifest 同步与审计 | 部分实现 | `api/internal/modules/manifest/`、`api/internal/modules/audit/` | manifest/audit 单元测试通过 | 缺少高风险差异预览、回滚和线上告警验证 | 补版本差异、同步互斥、失败补偿和告警 |
-| 统一 API 错误/分页/并发协议 | 部分实现 | 各模块 `transport/http`、`docs/contracts/openapi.yaml` | 无完整 Contract Test | 订单分页仍是有限 page[size]，OpenAPI 一致性未自动检查 | 建立统一 DTO、游标/排序/筛选和契约校验 |
+| 统一 API 错误/分页/并发协议 | 部分实现 | 各模块 `transport/http`、`docs/contracts/openapi.yaml` | 无完整 Contract Test | 业务分页仍需统一边界，OpenAPI 一致性未自动检查 | 建立统一 DTO、游标/排序/筛选和契约校验 |
 | 前台/后台界面 | 部分实现 | `web/`、`web/admin/` | 两端独立 Vite 生产构建通过 | 浏览器响应式、键盘和 WCAG 未在本次本机运行 | 执行 Playwright 桌面/平板/移动矩阵 |
 | 指标、日志、健康检查 | 部分实现 | `api/internal/platform/metrics/`、`logging/`、`api/cmd/server/main.go` | Go vet/test 通过；指标生产鉴权新增测试通过 | Trace、告警接入和线上敏感字段审计未验证 | 补 OpenTelemetry、脱敏测试和告警演练 |
 | Docker、Nginx、远程部署与回滚 | 部分实现 | `deploy/`、`docs/deployment.md`、`docs/testing-environment.md` | 历史记录有远程验证，但非本轮重新执行 | 本轮未重新部署；外部凭据和线上变更尚未授权/验证 | 先执行远程只读预检，再按备份/回滚流程发布 |

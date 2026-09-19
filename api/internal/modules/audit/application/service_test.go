@@ -50,10 +50,10 @@ func TestAuthenticationLifecycleEventsAreNotAuditEvents(t *testing.T) {
 func TestBusinessModuleCanRegisterAuditEventType(t *testing.T) {
 	repository := &fakeRepository{}
 	service := NewService(repository)
-	if err := service.RegisterEventType("ORDER_CREATED", platformaudit.EventDefinition{Category: "business", Severity: "info"}); err != nil {
+	if err := service.RegisterEventType("RESOURCE_CREATED", platformaudit.EventDefinition{Category: "business", Severity: "info"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.Record(context.Background(), platformaudit.Event{ID: "evt-order-1", EventType: "ORDER_CREATED", ApplicationCode: "orders"}); err != nil {
+	if err := service.Record(context.Background(), platformaudit.Event{ID: "evt-resource-1", EventType: "RESOURCE_CREATED", ApplicationCode: "catalog"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := repository.events[0]; got.Category != "business" || got.Severity != "info" {

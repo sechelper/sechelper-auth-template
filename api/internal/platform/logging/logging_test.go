@@ -12,14 +12,14 @@ import (
 func TestModuleLoggerEmitsBoundedStructuredFields(t *testing.T) {
 	var output []byte
 	core := zapcore.NewCore(zapcore.NewJSONEncoder(zapcore.EncoderConfig{MessageKey: "msg"}), zapcore.AddSync(&byteBuffer{value: &output}), zapcore.DebugLevel)
-	logger := NewModuleLogger(zap.New(core), "orders")
-	logger.Info(context.Background(), "order.loaded", Field{Key: "order_id", Value: "order-1"}, Field{Key: "password", Value: "must-not-log"}, Field{Key: "Bad Key", Value: "must-not-log"})
+	logger := NewModuleLogger(zap.New(core), "catalog")
+	logger.Info(context.Background(), "resource.loaded", Field{Key: "resource_id", Value: "resource-1"}, Field{Key: "password", Value: "must-not-log"}, Field{Key: "Bad Key", Value: "must-not-log"})
 
 	var record map[string]any
 	if err := json.Unmarshal(output, &record); err != nil {
 		t.Fatal(err)
 	}
-	if record["module"] != "orders" || record["order_id"] != "order-1" {
+	if record["module"] != "catalog" || record["resource_id"] != "resource-1" {
 		t.Fatalf("unexpected structured fields: %#v", record)
 	}
 	if _, ok := record["password"]; ok {

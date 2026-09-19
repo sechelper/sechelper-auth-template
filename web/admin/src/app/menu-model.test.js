@@ -4,18 +4,18 @@ import { filterMenuByPermission, findMenuExpansionKeys, findMenuTrail, groupMenu
 
 test("menu permission filtering recursively removes inaccessible routes and empty parents", () => {
   const menu = [{
-    label: "订单",
+    label: "目录",
     section: "业务运营",
     children: [
-      { label: "查看", path: "/admin/orders", permission: "order:read" },
-      { label: "配置", path: "/admin/orders/settings", permission: "order:configure" },
+      { label: "查看", path: "/admin/catalog", permission: "resource:read" },
+      { label: "配置", path: "/admin/catalog/settings", permission: "resource:configure" },
     ],
   }];
-  const visible = filterMenuByPermission(menu, (permission) => permission === "order:read");
+  const visible = filterMenuByPermission(menu, (permission) => permission === "resource:read");
   assert.deepEqual(visible, [{
-    label: "订单",
+    label: "目录",
     section: "业务运营",
-    children: [{ label: "查看", path: "/admin/orders", permission: "order:read" }],
+    children: [{ label: "查看", path: "/admin/catalog", permission: "resource:read" }],
   }]);
   assert.deepEqual(filterMenuByPermission(menu, () => false), []);
 });
@@ -48,7 +48,7 @@ test("business sections can move around fixed framework sections using declarati
     { path: "/admin", label: "概览" },
     { path: "/admin/security", label: "安全", section: "账号与安全", sectionOrder: 100 },
     { path: "/admin/audit", label: "审计", section: "监控与审计", sectionOrder: 200 },
-    { path: "/admin/orders", label: "订单", section: "业务运营", sectionOrder: -10 },
+    { path: "/admin/catalog", label: "目录", section: "业务运营", sectionOrder: -10 },
     { path: "/admin/reports", label: "报表", section: "业务分析", sectionOrder: 1000 },
   ]);
   assert.deepEqual(sections.map((section) => section.key), ["__root__", "业务运营", "账号与安全", "监控与审计", "业务分析"]);
@@ -69,11 +69,11 @@ test("business section declarations cannot override reserved groups or conflict"
 
 test("menu trail resolves nested business paths without the peer section title", () => {
   const groups = groupMenuItems([
-    { label: "订单", section: "业务运营", children: [{ label: "订单1", children: [{ path: "/admin/orders", label: "订单2" }] }] },
+    { label: "目录", section: "业务运营", children: [{ label: "项目1", children: [{ path: "/admin/catalog", label: "项目2" }] }] },
     { path: "/admin/audit-events", label: "操作审计", section: "监控与审计" },
   ]);
-  assert.deepEqual(findMenuTrail(groups, "/admin/orders"), ["订单", "订单1", "订单2"]);
+  assert.deepEqual(findMenuTrail(groups, "/admin/catalog"), ["目录", "项目1", "项目2"]);
   assert.deepEqual(findMenuTrail(groups, "/admin/audit-events"), ["操作审计"]);
   assert.deepEqual(findMenuTrail(groups, "/admin/unknown"), []);
-  assert.deepEqual(findMenuExpansionKeys(groups, "/admin/orders"), ["业务运营", "业务运营:0", "业务运营:0:0"]);
+  assert.deepEqual(findMenuExpansionKeys(groups, "/admin/catalog"), ["业务运营", "业务运营:0", "业务运营:0:0"]);
 });

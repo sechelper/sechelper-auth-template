@@ -11,8 +11,8 @@ test("public business registry is isolated and valid by default", () => {
 test("public modules are discovered deterministically and disabled examples are omitted", () => {
   const sample = { name: "sample", enabled: false };
   const catalog = { name: "catalog" };
-  const profileExample = { name: "profile-example" };
-  assert.deepEqual(enabledPublicBusinessModules({ "z/sample/public-module.js": sample, "a/catalog/public-module.js": catalog, "x/profile-example/example-module.js": profileExample }), [{ ...catalog, source: "a/catalog/public-module.js" }]);
+  const disabledExample = { name: "disabled-example" };
+  assert.deepEqual(enabledPublicBusinessModules({ "z/sample/public-module.js": sample, "a/catalog/public-module.js": catalog, "x/disabled-example/example-module.js": disabledExample }), [{ ...catalog, source: "a/catalog/public-module.js" }]);
 });
 
 test("public module routes must be unique and stay outside admin", () => {

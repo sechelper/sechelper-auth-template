@@ -33,9 +33,9 @@ docs/business/<module>/                    # 业务说明需要时创建
 
 ### 2.1 路径和命名
 
-- 所有业务 API 使用 `/v1/` 前缀，例如 `/v1/orders`、`/v1/orders/{orderId}`。
+- 所有业务 API 使用 `/v1/` 前缀，例如 `/v1/resources`、`/v1/resources/{resourceId}`。
 - 管理端业务 API 使用 `/v1/admin/<resource>`；浏览器页面路径使用 `/admin/...`，两者不能混用。
-- URL 使用资源名和 camelCase 参数名；路径参数应表达资源标识，例如 `{orderId}`，不要使用数据库列名或内部表名。
+- URL 使用资源名和 camelCase 参数名；路径参数应表达资源标识，例如 `{resourceId}`，不要使用数据库列名或内部表名。
 - JSON 字段使用 camelCase；Go 的数据库模型、内部 DTO 不得直接作为 API 响应。
 - 时间统一使用 UTC RFC3339；金额使用最小货币单位整数和明确的货币代码，不使用浮点数。
 - API 合同先写入 `docs/contracts/business/<module>/openapi.yaml`，再实现 Handler。路由、参数、响应、权限、错误码和分页行为必须都能在合同中找到。
@@ -72,8 +72,8 @@ docs/business/<module>/                    # 业务说明需要时创建
 ```json
 {
   "error": {
-    "code": "ORDER_NOT_FOUND",
-    "message": "订单不存在",
+    "code": "RESOURCE_NOT_FOUND",
+    "message": "资源不存在",
     "details": {}
   }
 }
@@ -93,7 +93,7 @@ docs/business/<module>/                    # 业务说明需要时创建
 | `500` | 未预期的服务端错误 |
 | `502/503` | 外部依赖或服务暂不可用 |
 
-业务错误码必须稳定、带模块命名空间或明确业务语义，例如 `ORDER_NOT_FOUND`、`ORDER_STATE_CONFLICT`。前端依据 `error.code` 决定展示、重试或跳转，不匹配后端自然语言。
+业务错误码必须稳定、带模块命名空间或明确业务语义，例如 `RESOURCE_NOT_FOUND`、`RESOURCE_STATE_CONFLICT`。前端依据 `error.code` 决定展示、重试或跳转，不匹配后端自然语言。
 
 ### 2.4 查询、分页和并发
 
@@ -155,13 +155,13 @@ docs/business/<module>/                    # 业务说明需要时创建
 每条需要登录的业务路由都必须通过宿主传入的 `RouteAuthorizer` 声明权限。例如：
 
 ```go
-group.GET("", authorizer.RequirePermissions("admin:access", "order:read"), handler.List)
-group.GET("/:orderId", authorizer.RequirePermissions("admin:access", "order:read"), handler.Get)
+group.GET("", authorizer.RequirePermissions("admin:access", "resource:read"), handler.List)
+group.GET("/:resourceId", authorizer.RequirePermissions("admin:access", "resource:read"), handler.Get)
 ```
 
 业务模块必须同时做到：
 
-- 权限码使用业务命名空间，如 `order:read`、`order:write`；
+- 权限码使用业务命名空间，如 `resource:read`、`resource:write`；
 - `RegisterPermissions` 中声明权限和实际 API 绑定；
 - 高风险写操作拆分独立权限，不用一个宽泛权限覆盖所有动作；
 - 服务端始终是最终权限裁决者，前端权限只控制导航、按钮和交互；
@@ -179,7 +179,7 @@ group.GET("/:orderId", authorizer.RequirePermissions("admin:access", "order:read
 ```text
 PAYMENT_PROVIDER_URL
 PAYMENT_TIMEOUT_SECONDS
-ORDER_EXPORT_BUCKET
+RESOURCE_EXPORT_BUCKET
 ```
 
 Key 必须符合 `[A-Z][A-Z0-9_]{0,127}`，建议使用模块前缀。业务模块不得声明或覆盖以下框架启动依赖：

@@ -9,7 +9,7 @@ func TestRegistryCanonicalizesManifestBeforeHashing(t *testing.T) {
 	r := NewRegistry("demo")
 	if err := r.Register(domain.Permission{
 		Code: " demo:read ", Name: " Read ", Description: " Description ",
-		APIs: []domain.API{{Method: " get ", Path: " /orders "}},
+		APIs: []domain.API{{Method: " get ", Path: " /resources "}},
 	}); err != nil {
 		t.Fatal(err)
 	}

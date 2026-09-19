@@ -26,15 +26,6 @@ RUN npm ci
 COPY web/admin .
 RUN npm run build -- --mode "$(printf '%s' "$BUILD_ENV" | tr '[:upper:]' '[:lower:]')" \
  && printf '{"component":"admin","applicationVersion":"%s","buildId":"%s","sourceRevision":"%s","environment":"%s"}\n' "$RELEASE_VERSION" "$BUILD_ID" "$SOURCE_REVISION" "$BUILD_ENV" > dist/build-info.json
-RUN BUILD_PROFILE="$(printf '%s' "$BUILD_ENV" | tr '[:upper:]' '[:lower:]')"; \
-    if [ "$BUILD_PROFILE" = production ]; then \
-      if grep -R -E -q '/admin/(component-reference|orders)' /src/web/admin/dist; then echo 'test/example route leaked into production bundle' >&2; exit 1; fi; \
-    elif [ "$BUILD_PROFILE" = test ]; then \
-      grep -R -F -q '/admin/component-reference' /src/web/admin/dist || { echo 'test build is missing component reference route' >&2; exit 1; }; \
-    elif grep -R -F -q '/admin/component-reference' /src/web/admin/dist; then echo 'test-only component reference leaked into development bundle' >&2; exit 1; fi; \
-    if [ "$BUILD_PROFILE" != production ]; then \
-      grep -R -F -q '/admin/orders' /src/web/admin/dist || { echo "$BUILD_PROFILE build is missing orders example route" >&2; exit 1; }; \
-    fi
 
 FROM nginx:1.27-alpine
 ARG RELEASE_VERSION

@@ -140,11 +140,12 @@ button:focus-visible, a:focus-visible { outline: 0; box-shadow: var(--sneat-focu
 .topbar-avatar .topbar-icon { width: 22px; height: 22px; }
 .topbar-avatar img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .topbar-user > i { position: absolute; right: 7px; bottom: 8px; width: 9px; height: 9px; border: 2px solid var(--frest-menu-bg); border-radius: 50%; background: #71dd37; }
-.topbar-user-menu { position: absolute; top: 51px; right: 0; z-index: 30; display: grid; min-width: 190px; gap: 4px; padding: 8px; border: 1px solid var(--frest-menu-border); border-radius: 5px; background: var(--sneat-surface-raised); box-shadow: var(--sneat-shadow-lg); }
-.topbar-user-menu strong { overflow: hidden; padding: 8px; color: var(--sneat-heading); font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
-.topbar-user-email { overflow: hidden; padding: 0 8px 6px; color: var(--sneat-muted); font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
-.topbar-user-menu button { padding: 8px; border-radius: 4px; color: var(--frest-menu-text); background: transparent; cursor: pointer; text-align: left; }
-.topbar-user-menu button:hover { color: var(--frest-menu-primary); background: rgba(90,141,238,.08); }
+.topbar-user-menu { position: absolute; top: 51px; right: 0; z-index: 30; display: grid; width: 224px; gap: 2px; padding: 12px; border: 1px solid var(--frest-menu-border); border-radius: 10px; background: var(--sneat-surface-raised); box-shadow: var(--sneat-shadow-lg); }
+.topbar-user-menu strong { min-width: 0; overflow: hidden; padding: 4px 8px 0; color: var(--sneat-heading); font-size: .875rem; font-weight: 650; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-user-email { min-width: 0; overflow: hidden; margin-bottom: 6px; padding: 0 8px 10px; border-bottom: 1px solid var(--frest-menu-border); color: var(--sneat-muted); font-size: .75rem; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-user-menu a, .topbar-user-menu button { display: flex; align-items: center; width: 100%; min-height: 40px; padding: 9px 10px; border: 0; border-radius: 6px; color: var(--frest-menu-text); background: transparent; cursor: pointer; font: 500 .875rem/1.25 "IBM Plex Sans", var(--sneat-font-family); text-align: left; text-decoration: none; }
+.topbar-user-menu a:hover, .topbar-user-menu button:hover { color: var(--frest-menu-primary); background: rgba(90,141,238,.08); }
+.topbar-user-menu a:focus-visible, .topbar-user-menu button:focus-visible { outline: 2px solid var(--frest-menu-primary); outline-offset: 1px; }
 .kicker { color: var(--sneat-primary); font-size: .625rem; }
 .main header strong { display: block; margin-top: .2rem; color: var(--sneat-heading); font-size: .875rem; }
 .account { display: flex; align-items: center; gap: .875rem; color: var(--sneat-body); font-size: .8125rem; }

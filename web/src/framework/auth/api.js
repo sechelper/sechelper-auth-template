@@ -3,7 +3,7 @@ import { apiOrigin } from "../config/runtime.js";
 let csrfToken = "";
 let refreshInFlight = null;
 let authEventHandler = null;
-const loginPathKey = "auth-template.login-path";
+const loginPathKey = "auth-template.public-login-path";
 const silentLoginAttemptKey = "auth-template.silent-login-attempt";
 const explicitLogoutKey = "auth-template.explicit-logout";
 const interactiveLoginAttemptKey = "auth-template.interactive-login-attempt";
@@ -24,7 +24,7 @@ export async function request(path, options = {}, { retry = true } = {}) {
   try {
     return await rawRequest(path, options);
   } catch (error) {
-    if (error?.status === 401 && retry && path !== "/v1/auth/refresh" && path !== "/v1/auth/logout") {
+    if (error?.status === 401 && retry && path !== "/v1/auth/public/refresh" && path !== "/v1/auth/public/logout") {
       try {
         await authApi.refresh();
         return await request(path, options, { retry: false });
@@ -33,8 +33,8 @@ export async function request(path, options = {}, { retry = true } = {}) {
         throw refreshError;
       }
     }
-    if (error?.status === 403 && error?.code === "CSRF_FAILED" && retry && path !== "/v1/auth/session") {
-      await rawRequest("/v1/auth/session");
+    if (error?.status === 403 && error?.code === "CSRF_FAILED" && retry && path !== "/v1/auth/public/session") {
+      await rawRequest("/v1/auth/public/session");
       return request(path, options, { retry: false });
     }
     throw error;
@@ -44,11 +44,20 @@ export async function request(path, options = {}, { retry = true } = {}) {
 export function setAuthEventHandler(handler) { authEventHandler = handler; return () => { if (authEventHandler === handler) authEventHandler = null; }; }
 
 export const authApi = {
-  session: () => request("/v1/auth/session"),
+  session: () => request("/v1/auth/public/session"),
   account: () => request("/v1/account/me"),
-  refresh: () => { if (!refreshInFlight) refreshInFlight = rawRequest("/v1/auth/refresh", { method: "POST" }).finally(() => { refreshInFlight = null; }); return refreshInFlight; },
-  logout: () => request("/v1/auth/logout", { method: "POST" }),
-  logoutCallback: (state) => request(`/v1/auth/logout/callback?state=${encodeURIComponent(state)}`),
+  refresh: () => {
+    if (!refreshInFlight) {
+      refreshInFlight = rawRequest("/v1/auth/public/refresh", { method: "POST" }).catch(async (error) => {
+        if (error?.status !== 403 || error?.code !== "CSRF_FAILED") throw error;
+        await rawRequest("/v1/auth/public/session");
+        return rawRequest("/v1/auth/public/refresh", { method: "POST" });
+      }).finally(() => { refreshInFlight = null; });
+    }
+    return refreshInFlight;
+  },
+  logout: () => request("/v1/auth/public/logout", { method: "POST" }),
+  logoutCallback: (state) => request(`/v1/auth/public/logout/callback?state=${encodeURIComponent(state)}`),
 	login: ({ prompt = "login", preservePath = true } = {}) => {
 		if (prompt === "login") {
 			try {
@@ -66,7 +75,8 @@ export const authApi = {
 				} catch { /* storage is optional */ }
 			}
 		}
-		window.location.assign(`${apiOrigin()}/v1/auth/login?prompt=${encodeURIComponent(prompt)}`);
+		const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+		window.location.assign(`${apiOrigin()}/v1/auth/public/login?prompt=${encodeURIComponent(prompt)}&return_to=${encodeURIComponent(returnTo)}`);
 	},
 };
 
@@ -128,10 +138,6 @@ export function restoreLoginPath() {
 		const path = window.sessionStorage.getItem(loginPathKey);
 		window.sessionStorage.removeItem(loginPathKey);
 		if (path && path.startsWith("/") && !path.startsWith("//") && path !== "/") {
-			if (/^\/admin(?:\/|$)/.test(path)) {
-				window.location.assign(path);
-				return;
-			}
 			window.history.replaceState({}, "", path);
 			window.dispatchEvent(new PopStateEvent("popstate"));
 		}

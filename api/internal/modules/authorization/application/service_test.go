@@ -37,6 +37,17 @@ func TestResolveCarriesExternalAndPlatformUserIdentifiers(t *testing.T) {
 	}
 }
 
+func TestRequireForSurfaceRejectsWrongSessionSurface(t *testing.T) {
+	store := session.NewMemoryStore()
+	if err := store.Create(context.Background(), session.Session{ID: "admin-session", Surface: "admin", Subject: "user-1", ApplicationCode: "admin", Permissions: []string{"admin:access"}, ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(store, NewMemoryCache())
+	if _, err := service.RequireForSurface(context.Background(), "admin-session", "public", "admin:access"); err != ErrUnauthorized {
+		t.Fatalf("RequireForSurface() error = %v, want ErrUnauthorized", err)
+	}
+}
+
 func TestServiceRejectsMissingSession(t *testing.T) {
 	service := NewService(session.NewMemoryStore(), NewMemoryCache())
 	if _, err := service.Resolve(context.Background(), "missing"); err != ErrUnauthorized {

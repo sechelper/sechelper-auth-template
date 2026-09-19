@@ -26,6 +26,11 @@ type LoginState struct {
 }
 
 const (
+	SurfacePublic = "public"
+	SurfaceAdmin  = "admin"
+)
+
+const (
 	PromptNone  = "none"
 	PromptLogin = "login"
 )
@@ -74,7 +79,7 @@ func (s *Service) SetUserResolver(issuer string, resolver UserResolver) {
 func NewService(client IdentityProvider, sessions session.Store, loginStates session.LoginTransactionStore, protector *session.TokenProtector, ttl time.Duration, applicationCode string) *Service {
 	return &Service{identity: client, sessions: sessions, loginStates: loginStates, protector: protector, ttl: ttl, applicationCode: applicationCode, profiles: make(map[string]cachedProfile)}
 }
-func (s *Service) BeginLogin(ctx context.Context, prompt string) (string, error) {
+func (s *Service) BeginLogin(ctx context.Context, prompt string, options ...string) (string, error) {
 	if prompt != PromptNone && prompt != PromptLogin {
 		return "", errors.New("unsupported login prompt")
 	}
@@ -92,21 +97,34 @@ func (s *Service) BeginLogin(ctx context.Context, prompt string) (string, error)
 	}
 	sum := sha256.Sum256([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(sum[:])
-	// Keep the prompt bound to the server-validated state without changing the
-	// existing login-transaction schema. The random portion remains the value
-	// protected by the transaction store's hash.
-	state := randomState + "." + prompt
-	if err := s.loginStates.SaveLoginTransaction(ctx, session.LoginTransaction{State: state, Nonce: nonce, Verifier: verifier, ExpiresAt: time.Now().Add(5 * time.Minute)}); err != nil {
+	surface, returnTo := SurfacePublic, "/"
+	if len(options) > 0 && options[0] != "" {
+		surface = options[0]
+	}
+	if len(options) > 1 && options[1] != "" {
+		returnTo = options[1]
+	}
+	if surface != SurfacePublic && surface != SurfaceAdmin {
+		return "", errors.New("unsupported authentication surface")
+	}
+	state := randomState + "." + prompt + "." + surface
+	if err := s.loginStates.SaveLoginTransaction(ctx, session.LoginTransaction{State: state, Surface: surface, ReturnTo: returnTo, Nonce: nonce, Verifier: verifier, ExpiresAt: time.Now().Add(5 * time.Minute)}); err != nil {
 		return "", err
 	}
 	return s.identity.AuthorizationURL(state, nonce, challenge, prompt)
 }
 
 func LoginPrompt(state string) string {
-	if strings.HasSuffix(state, "."+PromptNone) {
+	if strings.Contains(state, "."+PromptNone+".") || strings.HasSuffix(state, "."+PromptNone) {
 		return PromptNone
 	}
 	return PromptLogin
+}
+func LoginSurface(state string) string {
+	if strings.HasSuffix(state, "."+SurfaceAdmin) {
+		return SurfaceAdmin
+	}
+	return SurfacePublic
 }
 func (s *Service) CompleteLogin(ctx context.Context, state, code string) (result session.Session, resultErr error) {
 	value, err := s.loginStates.ConsumeLoginTransaction(ctx, state)
@@ -168,9 +186,13 @@ func (s *Service) CompleteLogin(ctx context.Context, state, code string) (result
 			return session.Session{}, err
 		}
 	}
-	result = session.Session{ID: id, Subject: user.Subject, PlatformUserUUID: platformUserUUID, Email: user.Email, ApplicationCode: auth.ApplicationCode, Permissions: permissions, ProfileClaims: profileClaims(user), RefreshTokenCiphertext: refreshToken, IDTokenCiphertext: encryptedIDToken, ExpiresAt: time.Now().Add(ttl)}
+	if value.Surface == "" {
+		value.Surface = SurfacePublic
+	}
+	result = session.Session{ID: id, Surface: value.Surface, ReturnTo: value.ReturnTo, Subject: user.Subject, PlatformUserUUID: platformUserUUID, Email: user.Email, ApplicationCode: auth.ApplicationCode, Permissions: permissions, ProfileClaims: profileClaims(user), RefreshTokenCiphertext: refreshToken, IDTokenCiphertext: encryptedIDToken, ExpiresAt: time.Now().Add(ttl)}
 	persisted := result
 	persisted.ProfileClaims = nil
+	persisted.ReturnTo = ""
 	if err := s.sessions.Create(ctx, persisted); err != nil {
 		return session.Session{}, err
 	}
@@ -193,9 +215,16 @@ func profileClaims(user identity.UserInfo) map[string]any {
 	}
 	return claims
 }
-func (s *Service) Refresh(ctx context.Context, id string) (result session.Session, resultErr error) {
+func (s *Service) Refresh(ctx context.Context, id string, surfaces ...string) (result session.Session, resultErr error) {
+	surface := SurfacePublic
+	if len(surfaces) > 0 && surfaces[0] != "" {
+		surface = surfaces[0]
+	}
 	if rotator, ok := s.sessions.(session.RefreshRotator); ok {
 		value, err := rotator.RotateRefreshToken(ctx, id, func(ctx context.Context, current session.Session) (session.Session, error) {
+			if current.Surface != "" && current.Surface != surface {
+				return session.Session{}, session.ErrNotFound
+			}
 			current.ProfileClaims = s.loadProfile(id, current.ExpiresAt)
 			return s.rotateSession(ctx, current)
 		})
@@ -211,6 +240,9 @@ func (s *Service) Refresh(ctx context.Context, id string) (result session.Sessio
 	current, err := s.sessions.Get(ctx, id)
 	if err != nil {
 		return session.Session{}, err
+	}
+	if current.Surface != "" && current.Surface != surface {
+		return session.Session{}, session.ErrNotFound
 	}
 	current.ProfileClaims = s.loadProfile(id, current.ExpiresAt)
 	if current.RefreshTokenCiphertext == "" {
@@ -255,10 +287,13 @@ func (s *Service) rotateSession(ctx context.Context, current session.Session) (s
 	current.ExpiresAt = time.Now().Add(ttl)
 	return current, nil
 }
-func (s *Service) Get(ctx context.Context, id string) (session.Session, error) {
+func (s *Service) Get(ctx context.Context, id string, surfaces ...string) (session.Session, error) {
 	value, err := s.sessions.Get(ctx, id)
 	if err != nil {
 		return session.Session{}, err
+	}
+	if len(surfaces) > 0 && surfaces[0] != "" && value.Surface != "" && value.Surface != surfaces[0] {
+		return session.Session{}, session.ErrNotFound
 	}
 	value.ProfileClaims = s.loadProfile(id, value.ExpiresAt)
 	return value, nil

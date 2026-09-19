@@ -41,7 +41,7 @@ flowchart LR
 
 ### 服务端路由
 
-- `GET /v1/authorization/me`：读取当前认证会话的 Application 授权上下文。
+- `GET /v1/admin/authorization/me`：读取 admin surface 当前认证会话的 Application 授权上下文。
 - `GET /v1/admin/resources`：列出业务模块注册的资源类型和动作，需要 `admin:access`。
 - `POST /v1/admin/access-decisions/check`：解释当前管理员对资源动作的授权决策，需要 `admin:access`。
 - `GET /v1/admin/audit-events`：查询关键审计事件，需要 `audit:read`。

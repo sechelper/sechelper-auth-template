@@ -6,7 +6,7 @@
 
 ## 流程
 
-1. 浏览器访问 `GET /v1/auth/login`。
+1. 公共前台访问 `GET /v1/auth/public/login`，管理后台访问 `GET /v1/auth/admin/login`。
 2. 服务端生成 state、nonce、PKCE verifier，并保存短期登录事务。
 3. 服务端跳转统一认证平台。
 4. `GET /v1/auth/callback` 接收授权码并校验 state。
@@ -16,7 +16,7 @@
 
 前台业务进入时只自动请求本地会话；未登录时显示业务自己的登录按钮，点击后使用 OIDC `prompt=login` 发起交互式登录。已登录时由业务页面正常加载数据，不因首页未登录而自动跳转认证。
 
-`GET /v1/auth/login` 只接受 `prompt=none` 或 `prompt=login`。认证模式绑定在一次性随机 `state` 的服务端事务中，不能由回调请求改写。业务登出后不会自动重新登录；用户再次进入业务时才会触发新的登录检查。
+两组登录入口只接受 `prompt=none` 或 `prompt=login`。认证 surface、模式和回跳地址绑定在一次性随机 `state` 的服务端事务中，不能由回调请求改写。业务登出后不会自动重新登录；用户再次进入业务时才会触发新的登录检查。
 
 退出登录先撤销本地 Session 和 Refresh Token。OIDC Profile 展示页完成退出后保持在当前页面，前端重新读取本地会话并直接显示未登录状态，不跳转到身份中心退出页面。服务端仍兼容生成 OIDC RP-Initiated Logout 地址和校验退出回调，供其他 API 客户端按需使用；浏览器 Profile 页不使用该地址，因此不会离开当前页面。
 
@@ -26,7 +26,7 @@
 
 ## 会话
 
-框架客户端将认证能力统一封装为登录、退出、会话探测和当前用户信息读取。`GET /v1/auth/session` 只用于判断本地会话是否有效；登录后由框架继续请求 `GET /v1/account/me` 获取当前用户的展示资料，业务模块不得直接读取认证 Cookie、Token 或调用身份平台 UserInfo。
+框架客户端将认证能力统一封装为登录、退出、会话探测和当前用户信息读取。公共前台使用 `/v1/auth/public/*` 和 `GET /v1/account/me`；管理后台使用 `/v1/auth/admin/*`、`GET /v1/admin/account` 和 `GET /v1/admin/authorization/me`。两端分别使用独立的 Session、CSRF Cookie 和登录事务，业务模块不得直接读取认证 Cookie、Token 或调用身份平台 UserInfo。
 
 “设置”不是本应用的用户设置模块，而是框架提供的统一身份中心用户中心链接。前台和管理后台使用相同的运行时地址入口，个人资料、密码、多重验证和登录设备等账户管理均在统一身份中心完成，本应用不保存这些设置。
 
@@ -34,9 +34,9 @@
 
 当前代码已提供 PostgreSQL Session Store。登录事务的 state、nonce 和 PKCE verifier 已保存到 `framework.authentication_login_transactions`，回调通过一次性 DELETE 原子消费，支持多实例回调并防止 state 重放。Session 通过 `version` 字段进行乐观并发控制，刷新写回使用版本条件；跨实例冲突会拒绝旧版本更新。数据库结构必须先通过独立迁移命令完成；API 启动时只检查数据库连通性，不再隐式修改 schema。Redis、多实例缓存广播和远端 Token 撤销仍需在统一认证平台契约确认后实现。
 
-`/v1/auth/login`、`/v1/auth/callback` 和 `/v1/auth/refresh` 由 `rateLimit` 配置限流。生产使用 Redis 计数器，开发环境在未配置 Redis 时使用进程内计数器；超过限制返回 `429 RATE_LIMITED` 和 `Retry-After`。
+`/v1/auth/public/login`、`/v1/auth/admin/login`、`/v1/auth/callback` 以及两组 refresh 入口由 `rateLimit` 配置限流。生产使用 Redis 计数器，开发环境在未配置 Redis 时使用进程内计数器；超过限制返回 `429 RATE_LIMITED` 和 `Retry-After`。
 
-服务端已提供 `POST /v1/auth/refresh`。Refresh Token 只以 AES-GCM 密文保存在 PostgreSQL，密钥由 `SESSION_ENCRYPTION_KEY` 注入，浏览器不接触 Refresh Token。生产 PostgreSQL Store 会在事务中锁定当前 Session 行，完成 Provider 刷新、密文替换和版本递增，跨实例不依赖进程内互斥锁。统一认证平台返回新的 Refresh Token 时，服务端替换旧密文；未返回时保留原有密文。Provider 明确返回 OAuth `invalid_grant` 时视为 Rotation Reuse，服务端在同一事务内撤销该 Session，客户端必须重新登录；网络超时和其他 Provider 错误不会静默授权。
+服务端已提供 `POST /v1/auth/public/refresh` 和 `POST /v1/auth/admin/refresh`。Refresh Token 只以 AES-GCM 密文保存在 PostgreSQL，密钥由 `SESSION_ENCRYPTION_KEY` 注入，浏览器不接触 Refresh Token。生产 PostgreSQL Store 会在事务中锁定当前 surface 的 Session 行，完成 Provider 刷新、密文替换和版本递增，跨实例不依赖进程内互斥锁。统一认证平台返回新的 Refresh Token 时，服务端替换旧密文；未返回时保留原有密文。Provider 明确返回 OAuth `invalid_grant` 时视为 Rotation Reuse，服务端在同一事务内撤销该 Session，客户端必须重新登录；网络超时和其他 Provider 错误不会静默授权。
 
 Refresh Rotation 的确定性回归测试位于 `api/internal/modules/authentication/application/service_test.go`。测试使用 Mock Identity Provider 固定返回两代 token，不依赖浏览器 Cookie 或等待 Session 自然过期，验证 Session 有效期更新、Refresh Token 密文轮换，以及旧 token 被拒绝。
 

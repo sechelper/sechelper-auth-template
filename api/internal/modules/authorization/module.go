@@ -11,20 +11,25 @@ import (
 type Module struct {
 	Service          *application.Service
 	Middleware       *authhttp.Middleware
+	AdminMiddleware  *authhttp.Middleware
 	Handler          *authhttp.Handler
 	ResourceRegistry *application.ResourceRegistry
 	ResourceService  *application.ResourceService
 	ResourceHandler  *authhttp.ResourceHandler
 }
 
-func New(sessions session.Store, cookieName string, cache application.Cache) *Module {
+func New(sessions session.Store, cookieName string, cache application.Cache, adminCookieNames ...string) *Module {
 	service := application.NewService(sessions, cache)
+	adminCookieName := cookieName + "_admin"
+	if len(adminCookieNames) > 0 && adminCookieNames[0] != "" {
+		adminCookieName = adminCookieNames[0]
+	}
 	resourceRegistry := application.NewResourceRegistry()
 	resourceService := application.NewResourceService(resourceRegistry)
-	return &Module{Service: service, Middleware: authhttp.NewMiddleware(service, cookieName), Handler: authhttp.NewHandler(), ResourceRegistry: resourceRegistry, ResourceService: resourceService, ResourceHandler: authhttp.NewResourceHandler(resourceService)}
+	return &Module{Service: service, Middleware: authhttp.NewMiddleware(service, cookieName, "public"), AdminMiddleware: authhttp.NewMiddleware(service, adminCookieName, "admin"), Handler: authhttp.NewHandler(), ResourceRegistry: resourceRegistry, ResourceService: resourceService, ResourceHandler: authhttp.NewResourceHandler(resourceService)}
 }
 func (m *Module) RegisterRoutes(v1 *gin.RouterGroup) {
-	v1.GET("/authorization/me", m.Middleware.RequireAuthentication(), m.Handler.Me)
+	v1.GET("/admin/authorization/me", m.AdminMiddleware.RequireAuthentication(), m.Handler.Me)
 }
 
 func (m *Module) RegisterResource(definition domain.ResourceDefinition, policy domain.ResourcePolicy) error {

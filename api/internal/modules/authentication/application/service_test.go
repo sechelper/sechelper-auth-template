@@ -28,6 +28,33 @@ func TestLoginPromptIsBoundToStateSuffix(t *testing.T) {
 		t.Fatalf("LoginPrompt(login) = %q", got)
 	}
 }
+
+type capturingLoginIdentity struct {
+	loginIdentity
+	state string
+}
+
+func (f *capturingLoginIdentity) AuthorizationURL(state, nonce, challenge, prompt string) (string, error) {
+	f.state = state
+	return "https://idp.test/authorize", nil
+}
+
+func TestBeginLoginStoresSurfaceAndReturnTo(t *testing.T) {
+	ctx := context.Background()
+	store := session.NewMemoryStore()
+	identity := &capturingLoginIdentity{loginIdentity: loginIdentity{subject: "identity-subject"}}
+	service := NewService(identity, store, store, nil, time.Hour, "app-1")
+	if _, err := service.BeginLogin(ctx, PromptNone, SurfaceAdmin, "/admin/audit-events"); err != nil {
+		t.Fatal(err)
+	}
+	transaction, err := store.ConsumeLoginTransaction(ctx, identity.state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if transaction.Surface != SurfaceAdmin || transaction.ReturnTo != "/admin/audit-events" {
+		t.Fatalf("transaction surface/returnTo = (%q, %q), want admin and requested path", transaction.Surface, transaction.ReturnTo)
+	}
+}
 func (f loginIdentity) ExchangeCode(context.Context, string, string) (identity.TokenSet, error) {
 	return identity.TokenSet{AccessToken: "access"}, nil
 }

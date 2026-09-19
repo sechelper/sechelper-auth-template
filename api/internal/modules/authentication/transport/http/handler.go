@@ -23,21 +23,31 @@ func NewHandler(service *application.Service, cfg config.SessionConfig, webOrigi
 	return &Handler{service: service, cfg: cfg, webOrigin: webOrigin}
 }
 func (h *Handler) Register(r *gin.RouterGroup) {
-	auth := r.Group("/auth")
-	auth.GET("/login", h.login)
-	auth.GET("/callback", h.callback)
-	auth.GET("/session", h.session)
-	auth.GET("/logout/callback", h.logoutCallback)
-	auth.POST("/refresh", h.refresh)
-	auth.POST("/logout", h.logout)
+	for _, surface := range []string{application.SurfacePublic, application.SurfaceAdmin} {
+		surface := surface
+		auth := r.Group("/auth/" + surface)
+		auth.GET("/login", func(c *gin.Context) { h.login(c, surface) })
+		auth.GET("/session", func(c *gin.Context) { h.session(c, surface) })
+		auth.GET("/logout/callback", func(c *gin.Context) { h.logoutCallback(c, surface) })
+		auth.POST("/refresh", func(c *gin.Context) { h.refresh(c, surface) })
+		auth.POST("/logout", func(c *gin.Context) { h.logout(c, surface) })
+	}
+	r.GET("/auth/callback", h.callback)
 }
-func (h *Handler) login(c *gin.Context) {
+func (h *Handler) login(c *gin.Context, surface string) {
 	prompt := c.DefaultQuery("prompt", application.PromptLogin)
 	if prompt != application.PromptNone && prompt != application.PromptLogin {
 		writeError(c, http.StatusBadRequest, "INVALID_LOGIN_PROMPT")
 		return
 	}
-	target, err := h.service.BeginLogin(c.Request.Context(), prompt)
+	returnTo := c.Query("return_to")
+	if !validReturnTo(surface, returnTo) {
+		returnTo = "/"
+		if surface == application.SurfaceAdmin {
+			returnTo = "/admin/"
+		}
+	}
+	target, err := h.service.BeginLogin(c.Request.Context(), prompt, surface, returnTo)
 	if err != nil {
 		writeError(c, 502, "IDENTITY_DEPENDENCY_FAILED")
 		return
@@ -45,9 +55,10 @@ func (h *Handler) login(c *gin.Context) {
 	c.Redirect(http.StatusFound, target)
 }
 func (h *Handler) callback(c *gin.Context) {
+	surface := application.LoginSurface(c.Query("state"))
 	if c.Query("error") != "" {
 		if application.LoginPrompt(c.Query("state")) == application.PromptNone {
-			c.Redirect(http.StatusFound, h.webOrigin+"/?auth=login-required")
+			c.Redirect(http.StatusFound, h.redirectPath(surface)+"?auth=login-required")
 			return
 		}
 		writeError(c, 401, "IDENTITY_LOGIN_FAILED")
@@ -58,12 +69,17 @@ func (h *Handler) callback(c *gin.Context) {
 		writeError(c, 401, "AUTHENTICATION_FAILED")
 		return
 	}
-	h.setCookie(c, value.ID, value.ExpiresAt)
-	c.Redirect(http.StatusFound, h.webOrigin+"/")
+	surface = value.Surface
+	h.setCookie(c, surface, value.ID, value.ExpiresAt)
+	redirectTo := h.redirectPath(surface)
+	if validReturnTo(surface, value.ReturnTo) {
+		redirectTo = value.ReturnTo
+	}
+	c.Redirect(http.StatusFound, redirectTo)
 }
-func (h *Handler) session(c *gin.Context) {
-	h.ensureCSRF(c)
-	value, err := h.current(c)
+func (h *Handler) session(c *gin.Context, surface string) {
+	h.ensureCSRF(c, surface)
+	value, err := h.current(c, surface)
 	if err != nil {
 		c.JSON(200, gin.H{"authenticated": false})
 		return
@@ -76,8 +92,8 @@ func (h *Handler) session(c *gin.Context) {
 	response["expiresAt"] = value.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z07:00")
 	c.JSON(200, response)
 }
-func (h *Handler) logout(c *gin.Context) {
-	if !h.validCSRF(c) {
+func (h *Handler) logout(c *gin.Context, surface string) {
+	if !h.validCSRF(c, surface) {
 		return
 	}
 	logoutState, err := session.NewID()
@@ -86,31 +102,31 @@ func (h *Handler) logout(c *gin.Context) {
 		return
 	}
 	result := application.LogoutResult{}
-	if id := h.cookie(c); id != "" {
-		result, _ = h.service.Logout(c.Request.Context(), id, h.webOrigin+"/v1/auth/logout/callback", logoutState)
+	if id := h.cookie(c, surface); id != "" {
+		result, _ = h.service.Logout(c.Request.Context(), id, h.webOrigin+"/v1/auth/"+surface+"/logout/callback", logoutState)
 	}
-	h.clearCookie(c)
+	h.clearCookie(c, surface)
 	if result.EndSessionURL == "" {
 		c.JSON(http.StatusOK, gin.H{"loggedOut": true})
 		return
 	}
-	h.setLogoutStateCookie(c, logoutState)
+	h.setLogoutStateCookie(c, surface, logoutState)
 	c.JSON(http.StatusOK, gin.H{"loggedOut": true, "logoutUrl": result.EndSessionURL})
 }
-func (h *Handler) logoutCallback(c *gin.Context) {
-	state, _ := c.Cookie("auth_template_logout_state")
+func (h *Handler) logoutCallback(c *gin.Context, surface string) {
+	state, _ := c.Cookie(h.logoutStateCookieName(surface))
 	if state == "" || state != c.Query("state") {
 		writeError(c, http.StatusForbidden, "LOGOUT_STATE_FAILED")
 		return
 	}
-	h.clearLogoutStateCookie(c)
-	c.Redirect(http.StatusFound, h.webOrigin+"/")
+	h.clearLogoutStateCookie(c, surface)
+	c.Redirect(http.StatusFound, h.redirectPath(surface))
 }
-func (h *Handler) refresh(c *gin.Context) {
-	if !h.validCSRF(c) {
+func (h *Handler) refresh(c *gin.Context, surface string) {
+	if !h.validCSRF(c, surface) {
 		return
 	}
-	value, err := h.service.Refresh(c.Request.Context(), h.cookie(c))
+	value, err := h.service.Refresh(c.Request.Context(), h.cookie(c, surface), surface)
 	if err != nil {
 		status := http.StatusBadGateway
 		if errors.Is(err, session.ErrNotFound) || errors.Is(err, application.ErrRefreshUnavailable) || errors.Is(err, session.ErrRefreshReuse) {
@@ -119,7 +135,11 @@ func (h *Handler) refresh(c *gin.Context) {
 		writeError(c, status, "SESSION_REFRESH_FAILED")
 		return
 	}
-	h.setCookie(c, value.ID, value.ExpiresAt)
+	h.setCookie(c, surface, value.ID, value.ExpiresAt)
+	// The CSRF cookie has the same lifetime as the local session. Refreshing
+	// the session must refresh both cookies, otherwise a long-lived session
+	// will eventually fail its next refresh with CSRF_FAILED.
+	h.renewCSRF(c, surface)
 	response := identityFields(value)
 	response["authenticated"] = true
 	response["email"] = value.Email
@@ -170,41 +190,82 @@ func profileNickname(profile map[string]any, fallback string) string {
 	}
 	return fallback
 }
-func (h *Handler) current(c *gin.Context) (session.Session, error) {
-	return h.service.Get(c.Request.Context(), h.cookie(c))
+func (h *Handler) current(c *gin.Context, surface string) (session.Session, error) {
+	return h.service.Get(c.Request.Context(), h.cookie(c, surface), surface)
 }
-func (h *Handler) cookie(c *gin.Context) string { value, _ := c.Cookie(h.cfg.CookieName); return value }
-func (h *Handler) setCookie(c *gin.Context, id string, expiresAt time.Time) {
+func (h *Handler) cookie(c *gin.Context, surface string) string {
+	value, _ := c.Cookie(h.cookieName(surface))
+	return value
+}
+func (h *Handler) cookieName(surface string) string {
+	if surface == application.SurfaceAdmin {
+		return h.cfg.CookieName + "_admin"
+	}
+	return h.cfg.CookieName
+}
+func (h *Handler) csrfCookieName(surface string) string { return "auth_template_csrf_" + surface }
+func (h *Handler) logoutStateCookieName(surface string) string {
+	return "auth_template_logout_state_" + surface
+}
+func (h *Handler) redirectPath(surface string) string {
+	if surface == application.SurfaceAdmin {
+		return h.webOrigin + "/admin/"
+	}
+	return h.webOrigin + "/"
+}
+func validReturnTo(surface, value string) bool {
+	if value == "" || !strings.HasPrefix(value, "/") || strings.HasPrefix(value, "//") {
+		return false
+	}
+	if surface == application.SurfaceAdmin {
+		return strings.HasPrefix(value, "/admin/") || value == "/admin"
+	}
+	return !strings.HasPrefix(value, "/admin")
+}
+func (h *Handler) setCookie(c *gin.Context, surface, id string, expiresAt time.Time) {
 	maxAge := int(time.Until(expiresAt).Seconds())
 	if maxAge < 1 {
 		maxAge = int(h.cfg.TTL.Seconds())
 	}
 	c.SetSameSite(parseSameSite(h.cfg.SameSite))
-	c.SetCookie(h.cfg.CookieName, id, maxAge, "/", "", h.cfg.Secure, true)
+	c.SetCookie(h.cookieName(surface), id, maxAge, "/", "", h.cfg.Secure, true)
 }
-func (h *Handler) clearCookie(c *gin.Context) {
+func (h *Handler) clearCookie(c *gin.Context, surface string) {
 	c.SetSameSite(parseSameSite(h.cfg.SameSite))
-	c.SetCookie(h.cfg.CookieName, "", -1, "/", "", h.cfg.Secure, true)
+	c.SetCookie(h.cookieName(surface), "", -1, "/", "", h.cfg.Secure, true)
 }
-func (h *Handler) ensureCSRF(c *gin.Context) {
-	value, err := c.Cookie("auth_template_csrf")
+func (h *Handler) ensureCSRF(c *gin.Context, surface string) {
+	name := h.csrfCookieName(surface)
+	value, err := c.Cookie(name)
 	if err != nil || value == "" {
 		value, _ = session.NewID()
-		c.SetSameSite(parseSameSite(h.cfg.SameSite))
-		c.SetCookie("auth_template_csrf", value, int(h.cfg.TTL.Seconds()), "/", "", h.cfg.Secure, false)
 	}
+	h.setCSRFCookie(c, name, value)
 	c.Header("X-CSRF-Token", value)
 }
-func (h *Handler) setLogoutStateCookie(c *gin.Context, value string) {
-	c.SetSameSite(parseSameSite(h.cfg.SameSite))
-	c.SetCookie("auth_template_logout_state", value, 300, "/", "", h.cfg.Secure, true)
+func (h *Handler) renewCSRF(c *gin.Context, surface string) {
+	name := h.csrfCookieName(surface)
+	value, err := c.Cookie(name)
+	if err != nil || value == "" {
+		value, _ = session.NewID()
+	}
+	h.setCSRFCookie(c, name, value)
+	c.Header("X-CSRF-Token", value)
 }
-func (h *Handler) clearLogoutStateCookie(c *gin.Context) {
+func (h *Handler) setCSRFCookie(c *gin.Context, name, value string) {
 	c.SetSameSite(parseSameSite(h.cfg.SameSite))
-	c.SetCookie("auth_template_logout_state", "", -1, "/", "", h.cfg.Secure, true)
+	c.SetCookie(name, value, int(h.cfg.TTL.Seconds()), "/", "", h.cfg.Secure, false)
 }
-func (h *Handler) validCSRF(c *gin.Context) bool {
-	csrf, _ := c.Cookie("auth_template_csrf")
+func (h *Handler) setLogoutStateCookie(c *gin.Context, surface, value string) {
+	c.SetSameSite(parseSameSite(h.cfg.SameSite))
+	c.SetCookie(h.logoutStateCookieName(surface), value, 300, "/", "", h.cfg.Secure, true)
+}
+func (h *Handler) clearLogoutStateCookie(c *gin.Context, surface string) {
+	c.SetSameSite(parseSameSite(h.cfg.SameSite))
+	c.SetCookie(h.logoutStateCookieName(surface), "", -1, "/", "", h.cfg.Secure, true)
+}
+func (h *Handler) validCSRF(c *gin.Context, surface string) bool {
+	csrf, _ := c.Cookie(h.csrfCookieName(surface))
 	if csrf == "" || csrf != c.GetHeader("X-CSRF-Token") {
 		writeError(c, http.StatusForbidden, "CSRF_FAILED")
 		return false

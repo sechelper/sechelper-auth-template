@@ -157,7 +157,7 @@ func main() {
 	}
 	defer closeAuthorizationCache()
 	authorizationModule := authorization.New(sessions, cfg.Session.CookieName, authorizationCache)
-	accountModule := account.New(sessions, cfg.Session.CookieName, authService.Get)
+	accountModule := account.New(sessions, cfg.Session.CookieName, func(ctx context.Context, id string) (session.Session, error) { return authService.Get(ctx, id) })
 	auditModule := audit.New(auditapplication.NewService(auditpersistence.NewRepository(db)))
 	configurationService := configurationapplication.NewService(configurationpersistence.NewRepository(db), centerProtector)
 	configurationModule := configuration.New(configurationService, func(ctx context.Context, actor, action, key string) {
@@ -290,13 +290,13 @@ func buildRouter(cfg config.Config, logger *zap.Logger, db *sql.DB, manifestRead
 	v1 := r.Group("/v1")
 	authHandler.Register(v1)
 	authorizationModule.RegisterRoutes(v1)
-	dashboardModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"))
-	accountModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("auth:session"))
-	authorizationModule.RegisterResourceRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"))
-	auditModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("audit:read"))
-	operationsModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("admin:access"), authorizationModule.Middleware.RequirePermission("admin:access"))
-	configurationModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermissions("admin:access", "configuration:read"), authorizationModule.Middleware.RequirePermissions("admin:access", "configuration:write"))
-	manifestModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermissions("admin:access", "auth:manifest:read"), authorizationModule.Middleware.RequirePermissions("admin:access", "auth:manifest:sync"))
+	dashboardModule.RegisterRoutes(v1, authorizationModule.AdminMiddleware.RequirePermission("admin:access"))
+	accountModule.RegisterRoutes(v1, authorizationModule.Middleware.RequirePermission("auth:session"), authorizationModule.AdminMiddleware.RequirePermission("auth:session"))
+	authorizationModule.RegisterResourceRoutes(v1, authorizationModule.AdminMiddleware.RequirePermission("admin:access"))
+	auditModule.RegisterRoutes(v1, authorizationModule.AdminMiddleware.RequirePermission("audit:read"))
+	operationsModule.RegisterRoutes(v1, authorizationModule.AdminMiddleware.RequirePermission("admin:access"), authorizationModule.AdminMiddleware.RequirePermission("admin:access"))
+	configurationModule.RegisterRoutes(v1, authorizationModule.AdminMiddleware.RequirePermissions("admin:access", "configuration:read"), authorizationModule.AdminMiddleware.RequirePermissions("admin:access", "configuration:write"))
+	manifestModule.RegisterRoutes(v1, authorizationModule.AdminMiddleware.RequirePermissions("admin:access", "auth:manifest:read"), authorizationModule.AdminMiddleware.RequirePermissions("admin:access", "auth:manifest:sync"))
 	if err := businessRuntime.RegisterRoutes(v1, authorizationModule.Middleware); err != nil {
 		return nil, err
 	}
@@ -343,16 +343,16 @@ func rateLimitAuth(limiter ratelimit.Limiter, cfg config.RateLimitConfig, servic
 	return func(c *gin.Context) {
 		limit := 0
 		switch c.Request.URL.Path {
-		case "/v1/auth/login":
+		case "/v1/auth/public/login", "/v1/auth/admin/login":
 			limit = cfg.LoginPerMinute
 			serviceMetrics.AuthLoginTotal.Add(1)
 		case "/v1/auth/callback":
 			limit = cfg.CallbackPerMinute
 			serviceMetrics.AuthCallbackTotal.Add(1)
-		case "/v1/auth/refresh":
+		case "/v1/auth/public/refresh", "/v1/auth/admin/refresh":
 			limit = cfg.RefreshPerMinute
 			serviceMetrics.AuthRefreshTotal.Add(1)
-		case "/v1/auth/logout":
+		case "/v1/auth/public/logout", "/v1/auth/admin/logout":
 			serviceMetrics.AuthLogoutTotal.Add(1)
 		}
 		if limit == 0 {
@@ -385,10 +385,10 @@ func rateLimitAuth(limiter ratelimit.Limiter, cfg config.RateLimitConfig, servic
 }
 
 func registerFrameworkPermissions(m *manifest.Module) error {
-	if err := m.Register(domain.Permission{Code: "admin:access", Name: "进入管理端", Description: "访问本应用后台管理能力和平台概览接口", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/authorization/me"}, {Method: "GET", Path: "/v1/admin/dashboard/overview"}, {Method: "GET", Path: "/v1/admin/dashboard/resources/ws"}, {Method: "GET", Path: "/v1/admin/deployment/guide"}, {Method: "GET", Path: "/v1/admin/resources"}, {Method: "POST", Path: "/v1/admin/access-decisions/check"}, {Method: "GET", Path: "/v1/admin/operations/overview"}}}); err != nil {
+	if err := m.Register(domain.Permission{Code: "admin:access", Name: "进入管理端", Description: "访问本应用后台管理能力和平台概览接口", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/admin/authorization/me"}, {Method: "GET", Path: "/v1/admin/dashboard/overview"}, {Method: "GET", Path: "/v1/admin/dashboard/resources/ws"}, {Method: "GET", Path: "/v1/admin/deployment/guide"}, {Method: "GET", Path: "/v1/admin/resources"}, {Method: "POST", Path: "/v1/admin/access-decisions/check"}, {Method: "GET", Path: "/v1/admin/operations/overview"}}}); err != nil {
 		return err
 	}
-	if err := m.Register(domain.Permission{Code: "auth:session", Name: "查看当前会话", Description: "读取当前登录会话和账号上下文", RiskLevel: "normal", APIs: []domain.API{{Method: "GET", Path: "/v1/auth/session"}, {Method: "GET", Path: "/v1/admin/account"}}}); err != nil {
+	if err := m.Register(domain.Permission{Code: "auth:session", Name: "查看当前会话", Description: "读取当前登录会话和账号上下文", RiskLevel: "normal", APIs: []domain.API{{Method: "GET", Path: "/v1/auth/public/session"}, {Method: "GET", Path: "/v1/auth/admin/session"}, {Method: "GET", Path: "/v1/account/me"}, {Method: "GET", Path: "/v1/admin/account"}}}); err != nil {
 		return err
 	}
 	if err := m.Register(domain.Permission{Code: "auth:manifest:read", Name: "查看认证 Manifest", Description: "查看本 Application 的 Manifest 同步状态", RiskLevel: "privileged", APIs: []domain.API{{Method: "GET", Path: "/v1/internal/authorization-manifest"}}}); err != nil {

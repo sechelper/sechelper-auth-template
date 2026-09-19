@@ -20,18 +20,18 @@ var (
 )
 
 type Session struct {
-	ID, Subject, PlatformUserUUID, Email, ApplicationCode string
-	Permissions                                           []string
-	ProfileClaims                                         map[string]any
-	RefreshTokenCiphertext, IDTokenCiphertext             string
-	ExpiresAt                                             time.Time
-	Version                                               int64
-	Revoked                                               bool
-	CreatedAt, UpdatedAt                                  time.Time
+	ID, Surface, ReturnTo, Subject, PlatformUserUUID, Email, ApplicationCode string
+	Permissions                                                              []string
+	ProfileClaims                                                            map[string]any
+	RefreshTokenCiphertext, IDTokenCiphertext                                string
+	ExpiresAt                                                                time.Time
+	Version                                                                  int64
+	Revoked                                                                  bool
+	CreatedAt, UpdatedAt                                                     time.Time
 }
 type LoginTransaction struct {
-	State, Nonce, Verifier string
-	ExpiresAt              time.Time
+	State, Surface, ReturnTo, Nonce, Verifier string
+	ExpiresAt                                 time.Time
 }
 type LoginTransactionStore interface {
 	SaveLoginTransaction(context.Context, LoginTransaction) error
@@ -64,7 +64,7 @@ func (s *PostgresStore) Create(ctx context.Context, value Session) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO framework.authentication_sessions (id, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, id_token_ciphertext, expires_at, version) VALUES ($1,$2,NULLIF($3,'')::uuid,$4,$5,$6,$7,$8,$9,1)`, value.ID, value.Subject, value.PlatformUserUUID, value.Email, value.ApplicationCode, permissions, value.RefreshTokenCiphertext, value.IDTokenCiphertext, value.ExpiresAt)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO framework.authentication_sessions (id, surface, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, id_token_ciphertext, expires_at, version) VALUES ($1,$2,$3,NULLIF($4,'')::uuid,$5,$6,$7,$8,$9,$10,1)`, value.ID, value.Surface, value.Subject, value.PlatformUserUUID, value.Email, value.ApplicationCode, permissions, value.RefreshTokenCiphertext, value.IDTokenCiphertext, value.ExpiresAt)
 	return err
 }
 func (s *PostgresStore) Get(ctx context.Context, id string) (Session, error) {
@@ -73,7 +73,7 @@ func (s *PostgresStore) Get(ctx context.Context, id string) (Session, error) {
 	var refreshToken, idToken sql.NullString
 	var revokedAt sql.NullTime
 	var platformUserUUID sql.NullString
-	err := s.db.QueryRowContext(ctx, `SELECT id, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, id_token_ciphertext, expires_at, version, revoked_at FROM framework.authentication_sessions WHERE id=$1 AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL`, id).Scan(&value.ID, &value.Subject, &platformUserUUID, &value.Email, &value.ApplicationCode, &permissions, &refreshToken, &idToken, &value.ExpiresAt, &value.Version, &revokedAt)
+	err := s.db.QueryRowContext(ctx, `SELECT id, surface, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, id_token_ciphertext, expires_at, version, revoked_at FROM framework.authentication_sessions WHERE id=$1 AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL`, id).Scan(&value.ID, &value.Surface, &value.Subject, &platformUserUUID, &value.Email, &value.ApplicationCode, &permissions, &refreshToken, &idToken, &value.ExpiresAt, &value.Version, &revokedAt)
 	if err == sql.ErrNoRows {
 		return Session{}, ErrNotFound
 	}
@@ -109,7 +109,7 @@ func (s *PostgresStore) RotateRefreshToken(ctx context.Context, id string, rotat
 		return Session{}, err
 	}
 	defer tx.Rollback()
-	current, err := scanSession(tx.QueryRowContext(ctx, `SELECT id, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, id_token_ciphertext, expires_at, version, revoked_at FROM framework.authentication_sessions WHERE id=$1 FOR UPDATE`, id))
+	current, err := scanSession(tx.QueryRowContext(ctx, `SELECT id, surface, subject, platform_user_uuid, email, application_code, permissions, refresh_token_ciphertext, id_token_ciphertext, expires_at, version, revoked_at FROM framework.authentication_sessions WHERE id=$1 FOR UPDATE`, id))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Session{}, ErrNotFound
@@ -237,13 +237,13 @@ func (s *MemoryStore) ConsumeLoginTransaction(_ context.Context, state string) (
 func loginStateHash(state string) string { return fmt.Sprintf("%x", sha256.Sum256([]byte(state))) }
 
 func (s *PostgresStore) SaveLoginTransaction(ctx context.Context, value LoginTransaction) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO framework.authentication_login_transactions (state_hash, nonce, verifier, expires_at) VALUES ($1,$2,$3,$4)`, loginStateHash(value.State), value.Nonce, value.Verifier, value.ExpiresAt)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO framework.authentication_login_transactions (state_hash, surface, return_to, nonce, verifier, expires_at) VALUES ($1,$2,$3,$4,$5,$6)`, loginStateHash(value.State), value.Surface, value.ReturnTo, value.Nonce, value.Verifier, value.ExpiresAt)
 	return err
 }
 
 func (s *PostgresStore) ConsumeLoginTransaction(ctx context.Context, state string) (LoginTransaction, error) {
 	var value LoginTransaction
-	err := s.db.QueryRowContext(ctx, `DELETE FROM framework.authentication_login_transactions WHERE state_hash=$1 AND expires_at > CURRENT_TIMESTAMP RETURNING nonce, verifier, expires_at`, loginStateHash(state)).Scan(&value.Nonce, &value.Verifier, &value.ExpiresAt)
+	err := s.db.QueryRowContext(ctx, `DELETE FROM framework.authentication_login_transactions WHERE state_hash=$1 AND expires_at > CURRENT_TIMESTAMP RETURNING surface, return_to, nonce, verifier, expires_at`, loginStateHash(state)).Scan(&value.Surface, &value.ReturnTo, &value.Nonce, &value.Verifier, &value.ExpiresAt)
 	if err == sql.ErrNoRows {
 		return LoginTransaction{}, ErrNotFound
 	}
@@ -262,7 +262,7 @@ func scanSession(row sessionScanner) (Session, error) {
 	var refreshToken, idToken sql.NullString
 	var revokedAt sql.NullTime
 	var platformUserUUID sql.NullString
-	err := row.Scan(&value.ID, &value.Subject, &platformUserUUID, &value.Email, &value.ApplicationCode, &permissions, &refreshToken, &idToken, &value.ExpiresAt, &value.Version, &revokedAt)
+	err := row.Scan(&value.ID, &value.Surface, &value.Subject, &platformUserUUID, &value.Email, &value.ApplicationCode, &permissions, &refreshToken, &idToken, &value.ExpiresAt, &value.Version, &revokedAt)
 	if err != nil {
 		return Session{}, err
 	}

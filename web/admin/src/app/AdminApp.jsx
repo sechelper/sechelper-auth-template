@@ -12,6 +12,7 @@ import { GlobalErrorPage } from "../../../shared/error-pages/GlobalErrorPage.jsx
 import { adminBusinessRoutes, adminBusinessNavigation, validateAdminBusinessModules } from "./admin-business-modules.js";
 import { filterMenuByPermission, validateBusinessMenuSections } from "./menu-model.js";
 import { appName, updateDocumentTitle } from "../platform/config/runtime.js";
+import { hasSilentLoginFailure } from "../modules/auth/api.js";
 
 validateAdminBusinessModules();
 const businessNavigation = adminBusinessNavigation();
@@ -53,10 +54,11 @@ export function AdminApp() {
   const [pathname, setPathname] = useState(() => initialAdminPath());
   useEffect(() => { updateDocumentTitle(); }, [state.status]);
   useEffect(() => { const handler = () => setPathname(normalizePathname()); window.addEventListener("popstate", handler); return () => window.removeEventListener("popstate", handler); }, []);
-  useEffect(() => { if (state.status === "unauthenticated") login(); }, [state.status, login]);
+  useEffect(() => { if (state.status === "unauthenticated" && !hasSilentLoginFailure()) login({ prompt: "none" }); }, [state.status, login]);
   if (state.status === "loading") return <Loading text="正在验证管理员会话…" />;
   if (state.status === "error") return <ServerErrorPage retry={login} />;
   if (state.status === "reauthentication_required") return <ErrorPage code="401" title="管理员会话已过期" description="为了保护管理操作，当前会话已经失效，请重新登录后继续。" action="重新登录" onAction={login} />;
+  if (state.status === "unauthenticated" && hasSilentLoginFailure()) return <ErrorPage code="401" title="管理员会话已过期" description="静默恢复失败，请重新登录后继续。" action="重新登录" onAction={() => login({ prompt: "login" })} />;
   if (state.status !== "authenticated") return null;
   if (!hasPermission("admin:access")) return <ForbiddenPage />;
   const visibleMenu = filterMenuByPermission([...menu, ...businessNavigation], hasPermission);

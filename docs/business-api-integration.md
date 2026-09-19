@@ -114,7 +114,7 @@ docs/business/<module>/                    # 业务说明需要时创建
 | 能力 | 业务使用方式 |
 | --- | --- |
 | 当前会话 | 读取 `state.status`、`state.authenticated`、`state.expiresAt` 等状态 |
-| 当前用户 | 读取 Provider 返回的 `user`；服务端来源为 `GET /v1/account/me` |
+| 当前用户 | 公共前台读取 `GET /v1/account/me`；管理后台读取 `GET /v1/admin/account` |
 | 登录 | 调用 `login()`；需要静默检查时调用 `silentLogin()`（公共前台） |
 | 刷新页面状态 | 调用 `refresh()`，重新读取会话和用户资料 |
 | 刷新服务端会话 | 调用 `refreshSession()`，由框架完成 CSRF 和 Refresh Rotation |
@@ -128,12 +128,12 @@ docs/business/<module>/                    # 业务说明需要时创建
 
 | API | 业务接入规则 |
 | --- | --- |
-| `GET /v1/auth/session` | 只用于判断本地会话是否有效；不返回业务用户资料 |
-| `GET /v1/account/me` | 登录后读取当前用户展示资料；业务不得直接调用身份平台 UserInfo |
-| `GET /v1/authorization/me` | 管理端读取当前 Application 权限；仅用于导航和交互展示 |
-| `POST /v1/auth/refresh` | 由框架认证客户端调用；需要 `X-CSRF-Token`，业务不实现 Refresh Token 轮换 |
-| `POST /v1/auth/logout` | 由框架认证客户端调用；服务端先撤销本地会话，远端撤销失败不阻断本地退出 |
-| `GET /v1/auth/login` | 由 Provider 通过 `login()` 调用；只允许 `prompt=none` 或 `prompt=login` |
+| `GET /v1/auth/public/session` / `GET /v1/auth/admin/session` | 只用于判断对应 surface 的本地会话是否有效；不返回业务用户资料 |
+| `GET /v1/account/me` / `GET /v1/admin/account` | 登录后读取对应 surface 的当前用户展示资料；业务不得直接调用身份平台 UserInfo |
+| `GET /v1/admin/authorization/me` | 管理端读取 admin surface 的 Application 权限；仅用于导航和交互展示 |
+| `POST /v1/auth/public/refresh` / `POST /v1/auth/admin/refresh` | 由对应框架认证客户端调用；需要对应的 `X-CSRF-Token`，业务不实现 Refresh Token 轮换 |
+| `POST /v1/auth/public/logout` / `POST /v1/auth/admin/logout` | 只撤销对应 surface 的本地会话；远端撤销失败不阻断本地退出 |
+| `GET /v1/auth/public/login` / `GET /v1/auth/admin/login` | 由对应 Provider 通过 `login()` 调用；只允许 `prompt=none` 或 `prompt=login` |
 
 登录回调、state、nonce、PKCE、ID Token 校验、Session Cookie、Refresh Token 密文保存和退出状态均属于框架职责。业务 API 只依赖“当前请求是否已经通过宿主授权中间件”这一结果。
 
@@ -235,8 +235,8 @@ func (m *Module) timeoutSeconds(ctx context.Context) (int, error) {
 | 能力 | 接入方式 | 业务边界 |
 | --- | --- | --- |
 | 统一认证会话 | 前端 `AuthProvider`；服务端授权中间件 | 不读 Cookie、Token、Session Store |
-| 当前用户资料 | `GET /v1/account/me` / `useAuth().user` | 不复制身份平台用户主数据到业务表 |
-| Application 权限 | `RouteAuthorizer`、`GET /v1/authorization/me` | 服务端权威；前端只做展示控制 |
+| 当前用户资料 | `GET /v1/account/me`、`GET /v1/admin/account` / `useAuth().user` | 不复制身份平台用户主数据到业务表 |
+| Application 权限 | `RouteAuthorizer`、`GET /v1/admin/authorization/me` | 服务端权威；前端只做展示控制 |
 | 资源级授权 | `RegisterResources` + 业务 use case 策略 | 业务负责租户、所有权、状态和数据范围 |
 | 配置中心 | `ConfigurationProvider.Get(ctx, key)` | 不读环境变量、配置文件或配置中心表 |
 | API 错误协议 | 宿主 HTTP 错误封装 | 不自建另一套公共错误格式 |

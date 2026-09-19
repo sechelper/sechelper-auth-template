@@ -79,7 +79,8 @@ make run ENV=production ACTION=migrate
 ```bash
 curl --fail-with-body "$API_ORIGIN/healthz"
 curl --fail-with-body "$API_ORIGIN/readyz"
-curl -i "$API_ORIGIN/v1/auth/session"
+curl -i "$API_ORIGIN/v1/auth/public/session"
+curl -i "$API_ORIGIN/v1/auth/admin/session"
 curl --fail-with-body -H "Authorization: Bearer $METRICS_TOKEN" "$API_ORIGIN/metrics"
 ```
 

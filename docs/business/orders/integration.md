@@ -38,7 +38,7 @@
 
 业务模块可以通过宿主注入的公开边界使用：
 
-- Session 身份与当前账号信息：由 `/v1/auth/session`、`/v1/account/me` 和浏览器认证适配器提供；业务不接触 Cookie 或 Token。
+- Session 身份与当前账号信息：公共前台由 `/v1/auth/public/session`、`/v1/account/me` 提供；管理后台由对应 admin surface 接口提供；业务不接触 Cookie 或 Token。
 - 服务端授权：模块注册权限、资源和受保护路由；最终决策由服务端执行。
 - 标准 HTTP：统一请求 ID、错误封装和 JSON `data`/`meta` 响应形状。
 - 审计与日志：通过宿主注册器/Recorder 写入，不自建审计表或日志协议。

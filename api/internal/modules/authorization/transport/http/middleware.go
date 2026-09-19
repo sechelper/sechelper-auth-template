@@ -15,15 +15,20 @@ const contextKey = "authorization.context"
 type Middleware struct {
 	service    *application.Service
 	cookieName string
+	surface    string
 }
 
-func NewMiddleware(service *application.Service, cookieName string) *Middleware {
-	return &Middleware{service: service, cookieName: cookieName}
+func NewMiddleware(service *application.Service, cookieName string, surface ...string) *Middleware {
+	value := "public"
+	if len(surface) > 0 && surface[0] != "" {
+		value = surface[0]
+	}
+	return &Middleware{service: service, cookieName: cookieName, surface: value}
 }
 func (m *Middleware) RequirePermission(permission string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		sessionID, _ := c.Cookie(m.cookieName)
-		value, err := m.service.Require(c.Request.Context(), sessionID, permission)
+		value, err := m.service.RequireForSurface(c.Request.Context(), sessionID, m.surface, permission)
 		if err != nil {
 			writeAuthorizationError(c, err)
 			return
@@ -38,7 +43,7 @@ func (m *Middleware) RequirePermissions(permissions ...string) gin.HandlerFunc {
 		sessionID, _ := c.Cookie(m.cookieName)
 		var value domain.Context
 		for _, permission := range permissions {
-			resolved, err := m.service.Require(c.Request.Context(), sessionID, permission)
+			resolved, err := m.service.RequireForSurface(c.Request.Context(), sessionID, m.surface, permission)
 			if err != nil {
 				writeAuthorizationError(c, err)
 				return
@@ -52,7 +57,7 @@ func (m *Middleware) RequirePermissions(permissions ...string) gin.HandlerFunc {
 func (m *Middleware) RequireAuthentication() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		sessionID, _ := c.Cookie(m.cookieName)
-		value, err := m.service.Resolve(c.Request.Context(), sessionID)
+		value, err := m.service.ResolveForSurface(c.Request.Context(), sessionID, m.surface)
 		if err != nil {
 			writeAuthorizationError(c, err)
 			return

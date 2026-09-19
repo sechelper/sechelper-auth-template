@@ -6,7 +6,7 @@
 
 ## 当前执行链
 
-`GET /v1/authorization/me` 已经接入认证会话和授权模块。授权模块先读取 Session，再读取授权缓存；缓存未命中时从 Session 中恢复登录时取得的 Application 权限集合。业务接口应通过 `RequirePermission("<permission>")` 中间件执行权限检查。
+`GET /v1/admin/authorization/me` 已经接入 admin surface 的认证会话和授权模块。授权模块先读取 Session，再读取授权缓存；缓存未命中时从 Session 中恢复登录时取得的 Application 权限集合。业务接口应通过 `RequirePermission("<permission>")` 中间件执行权限检查。
 
 缺少会话返回 `401 UNAUTHORIZED`，已登录但缺少权限返回 `403 FORBIDDEN`。授权上下文通过模块内部 Context 注入 Handler，业务模块不应读取 Session Store 或认证客户端。
 

@@ -89,6 +89,10 @@ func (s *Service) Resolve(ctx context.Context, sessionID string) (domain.Context
 		}
 		return domain.Context{}, fmt.Errorf("%w: %v", ErrDependency, err)
 	}
+	return s.resolveCurrent(ctx, sessionID, current)
+}
+
+func (s *Service) resolveCurrent(ctx context.Context, sessionID string, current session.Session) (domain.Context, error) {
 	if value, ok, err := s.cache.Get(ctx, sessionID); err != nil {
 		return domain.Context{}, fmt.Errorf("%w: %v", ErrDependency, err)
 	} else if ok {
@@ -104,8 +108,36 @@ func (s *Service) Resolve(ctx context.Context, sessionID string) (domain.Context
 	}
 	return value, nil
 }
+
+func (s *Service) ResolveForSurface(ctx context.Context, sessionID, surface string) (domain.Context, error) {
+	if sessionID == "" {
+		return domain.Context{}, ErrUnauthorized
+	}
+	current, err := s.sessions.Get(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, session.ErrNotFound) {
+			return domain.Context{}, ErrUnauthorized
+		}
+		return domain.Context{}, fmt.Errorf("%w: %v", ErrDependency, err)
+	}
+	if current.Surface != "" && current.Surface != surface {
+		return domain.Context{}, ErrUnauthorized
+	}
+	return s.resolveCurrent(ctx, sessionID, current)
+}
 func (s *Service) Require(ctx context.Context, sessionID, permission string) (domain.Context, error) {
 	value, err := s.Resolve(ctx, sessionID)
+	if err != nil {
+		return domain.Context{}, err
+	}
+	if !value.HasPermission(permission) {
+		return domain.Context{}, ErrForbidden
+	}
+	return value, nil
+}
+
+func (s *Service) RequireForSurface(ctx context.Context, sessionID, surface, permission string) (domain.Context, error) {
+	value, err := s.ResolveForSurface(ctx, sessionID, surface)
 	if err != nil {
 		return domain.Context{}, err
 	}

@@ -3,6 +3,7 @@ import { apiOrigin } from "../../platform/config/runtime.js";
 let csrfToken = "";
 let refreshInFlight = null;
 let authEventHandler = null;
+export const SESSION_REFRESH_LEEWAY_MS = 120000;
 const loginPathKey = "auth-template.admin-login-path";
 const silentLoginAttemptKey = "auth-template.silent-login-attempt";
 const explicitLogoutKey = "auth-template.explicit-logout";
@@ -37,6 +38,11 @@ export async function request(path, options = {}, { retry = true } = {}) {
 }
 
 export function setAuthEventHandler(handler) { authEventHandler = handler; return () => { if (authEventHandler === handler) authEventHandler = null; }; }
+
+export function sessionNeedsRefresh(expiresAt, now = Date.now()) {
+  const expires = Date.parse(expiresAt || "");
+  return Number.isFinite(expires) && expires - now <= SESSION_REFRESH_LEEWAY_MS;
+}
 
 export const authApi = {
   session: () => request("/v1/auth/admin/session"),

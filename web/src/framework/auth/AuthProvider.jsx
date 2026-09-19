@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { authApi, clearAuthStatus, consumeInteractiveLoginAttempt, consumeSilentLoginAttempt, hasExplicitLogout, hasSilentLoginFailure, markExplicitLogout, markSilentLoginAttempt, setAuthEventHandler, subscribeToAuthChanges } from "./api.js";
+import { authApi, clearAuthStatus, consumeInteractiveLoginAttempt, consumeSilentLoginAttempt, hasExplicitLogout, hasSilentLoginFailure, markExplicitLogout, markSilentLoginAttempt, sessionNeedsRefresh, setAuthEventHandler, subscribeToAuthChanges } from "./api.js";
 import { loadRuntimeConfig, oidcAccountURL } from "../config/runtime.js";
 
 const AuthContext = createContext(null);
@@ -52,11 +52,11 @@ export function AuthProvider({ children }) {
     }
     initialize();
     const unsubscribe = subscribeToAuthChanges(() => { if (!cancelled) setState({ status: "unauthenticated" }); });
-    const refreshTimer = setInterval(async () => {
+    let refreshing = false;
+    const refreshSessionIfNeeded = async () => {
       const current = stateRef.current;
-      if (cancelled || current.status !== "authenticated" || !current.expiresAt) return;
-      const remaining = Date.parse(current.expiresAt) - Date.now();
-      if (remaining > 120000) return;
+      if (cancelled || refreshing || current.status !== "authenticated" || !sessionNeedsRefresh(current.expiresAt)) return;
+      refreshing = true;
       try {
         setState((current) => ({ ...current, status: "refreshing" }));
         await authApi.refresh();
@@ -68,8 +68,13 @@ export function AuthProvider({ children }) {
           setState({ status: "reauthentication_required", retryable: true });
         } else setState({ status: "error", retryable: true });
       }
-    }, 30000);
-    return () => { cancelled = true; unsubscribe(); stopAuthEvents(); clearInterval(refreshTimer); };
+      finally { refreshing = false; }
+    };
+    const refreshTimer = setInterval(refreshSessionIfNeeded, 30000);
+    const onVisibilityOrFocus = () => { if (document.visibilityState !== "hidden") void refreshSessionIfNeeded(); };
+    document.addEventListener("visibilitychange", onVisibilityOrFocus);
+    window.addEventListener("focus", onVisibilityOrFocus);
+    return () => { cancelled = true; unsubscribe(); stopAuthEvents(); clearInterval(refreshTimer); document.removeEventListener("visibilitychange", onVisibilityOrFocus); window.removeEventListener("focus", onVisibilityOrFocus); };
   }, []);
 
   useEffect(() => {

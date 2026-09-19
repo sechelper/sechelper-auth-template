@@ -155,6 +155,22 @@ paths:
         '200': { description: Session refreshed }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/auth/admin/refresh:
+    post:
+      operationId: refreshAdminSession
+      summary: Refresh the server-side admin Confidential Client session with the OIDC refresh token grant
+      description: The server decrypts the refresh token held by the admin session, calls the configured OIDC Token Endpoint with grant_type=refresh_token, atomically stores a rotated refresh token when returned, and extends the local session. The browser never receives an access token or refresh token.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Admin session refreshed }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /v1/auth/public/logout/callback:
     get:
       operationId: completeLogout
